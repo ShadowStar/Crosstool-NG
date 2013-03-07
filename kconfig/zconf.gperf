@@ -7,6 +7,10 @@
 %pic
 %struct-type
 
+%{
+#include <stddef.h>
+%}
+
 struct kconf_id;
 
 static struct kconf_id *kconf_id_lookup(register const char *str, register unsigned int len);
