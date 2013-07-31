@@ -1,0 +1,5 @@
+repo: fb871400e0c81aaa9a549a7248b0db4e489a40dd
+node: 1048e4dca434df43ab9927d9dbd6129f4eaa3bac
+branch: default
+latesttag: crosstool-ng-1.1.0
+latesttagdistance: 2234

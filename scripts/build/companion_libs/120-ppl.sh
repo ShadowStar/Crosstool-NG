@@ -12,10 +12,8 @@ if [ "${CT_PPL}" = "y" ]; then
 
 # Download PPL
 do_ppl_get() {
-    CT_GetFile "ppl-${CT_PPL_VERSION}"                                      \
-        http://www.cs.unipr.it/ppl/Download/ftp/releases/${CT_PPL_VERSION}  \
-        ftp://ftp.cs.unipr.it/pub/ppl/releases/${CT_PPL_VERSION}            \
-        ftp://gcc.gnu.org/pub/gcc/infrastructure
+    CT_GetFile "ppl-${CT_PPL_VERSION}"  \
+        http://bugseng.com/products/ppl/download/ftp/releases/${CT_PPL_VERSION}
 }
 
 # Extract PPL
@@ -31,6 +29,7 @@ do_ppl_extract() {
 do_ppl_for_build() {
     local -a ppl_opts
     local ppl_cflags
+    local ppl_cxxflags
 
     case "${CT_TOOLCHAIN_TYPE}" in
         native|cross)   return 0;;
@@ -40,13 +39,15 @@ do_ppl_for_build() {
     CT_mkdir_pushd "${CT_BUILD_DIR}/build-ppl-build-${CT_BUILD}"
 
     ppl_cflags="${CT_CFLAGS_FOR_BUILD}"
+    ppl_cxxflags="${CT_CFLAGS_FOR_BUILD}"
     if [ "${CT_PPL_NEEDS_FPERMISSIVE}" = "y" ]; then
-        ppl_cflags+=" -fpermissive"
+        ppl_cxxflags+=" -fpermissive"
     fi
 
     ppl_opts+=( "host=${CT_BUILD}" )
     ppl_opts+=( "prefix=${CT_BUILDTOOLS_PREFIX_DIR}" )
     ppl_opts+=( "cflags=${ppl_cflags}" )
+    ppl_opts+=( "cxxflags=${ppl_cxxflags}" )
     ppl_opts+=( "ldflags=${CT_LDFLAGS_FOR_BUILD}" )
     do_ppl_backend "${ppl_opts[@]}"
 
@@ -58,18 +59,21 @@ do_ppl_for_build() {
 do_ppl_for_host() {
     local -a ppl_opts
     local ppl_cflags
+    local ppl_cxxflags
 
     CT_DoStep INFO "Installing PPL for host"
     CT_mkdir_pushd "${CT_BUILD_DIR}/build-ppl-host-${CT_HOST}"
 
     ppl_cflags="${CT_CFLAGS_FOR_HOST}"
+    ppl_cxxflags="${CT_CFLAGS_FOR_HOST}"
     if [ "${CT_PPL_NEEDS_FPERMISSIVE}" = "y" ]; then
-        ppl_cflags+=" -fpermissive"
+        ppl_cxxflags+=" -fpermissive"
     fi
 
     ppl_opts+=( "host=${CT_HOST}" )
     ppl_opts+=( "prefix=${CT_HOST_COMPLIBS_DIR}" )
     ppl_opts+=( "cflags=${ppl_cflags}" )
+    ppl_opts+=( "cxxflags=${ppl_cxxflags}" )
     ppl_opts+=( "ldflags=${CT_LDFLAGS_FOR_HOST}" )
     do_ppl_backend "${ppl_opts[@]}"
 
@@ -87,6 +91,7 @@ do_ppl_backend() {
     local host
     local prefix
     local cflags
+    local cxxflags
     local ldflags
     local arg
 
@@ -98,7 +103,7 @@ do_ppl_backend() {
 
     CT_DoExecLog CFG                                \
     CFLAGS="${cflags}"                              \
-    CXXFLAGS="${cflags}"                            \
+    CXXFLAGS="${cxxflags}"                          \
     LDFLAGS="${ldflags}"                            \
     "${CT_SRC_DIR}/ppl-${CT_PPL_VERSION}/configure" \
         --build=${CT_BUILD}                         \

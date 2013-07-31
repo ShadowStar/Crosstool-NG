@@ -282,15 +282,21 @@ do_cc_core_backend() {
         extra_config+=("--with-mpc=${complibs}")
     fi
     if [ "${CT_CC_GCC_USE_GRAPHITE}" = "y" ]; then
-        extra_config+=("--with-ppl=${complibs}")
-        # With PPL 0.11+, also pull libpwl if needed
-        if [ "${CT_PPL_NEEDS_LIBPWL}" = "y" ]; then
-            host_libstdcxx_flags+=("-L${complibs}/lib")
-            host_libstdcxx_flags+=("-lpwl")
+        if [ "${CT_PPL}" = "y" ]; then
+            extra_config+=("--with-ppl=${complibs}")
+            # With PPL 0.11+, also pull libpwl if needed
+            if [ "${CT_PPL_NEEDS_LIBPWL}" = "y" ]; then
+                host_libstdcxx_flags+=("-L${complibs}/lib")
+                host_libstdcxx_flags+=("-lpwl")
+            fi
+        fi
+        if [ "${CT_ISL}" = "y" ]; then
+            extra_config+=("--with-isl=${complibs}")
         fi
         extra_config+=("--with-cloog=${complibs}")
     elif [ "${CT_CC_GCC_HAS_GRAPHITE}" = "y" ]; then
         extra_config+=("--with-ppl=no")
+        extra_config+=("--with-isl=no")
         extra_config+=("--with-cloog=no")
     fi
     if [ "${CT_CC_GCC_USE_LTO}" = "y" ]; then
@@ -409,6 +415,11 @@ do_cc_core_backend() {
             CT_DoExecLog CFG make ${JOBSFLAGS} configure-libdecnumber
             CT_DoExecLog ALL make ${JOBSFLAGS} -C libdecnumber libdecnumber.a
         fi
+        # HACK: gcc-4.8 uses libbacktrace to make libgcc.mvars, so make it here.
+        if [ -d "${CT_SRC_DIR}/gcc-${CT_CC_VERSION}/libbacktrace" ]; then
+            CT_DoExecLog CFG make ${JOBSFLAGS} configure-libbacktrace
+            CT_DoExecLog ALL make ${JOBSFLAGS} -C libbacktrace
+        fi
 
         # Starting with GCC 4.3, libgcc.mk is no longer built,
         # and libgcc.mvars is used instead.
@@ -427,6 +438,7 @@ do_cc_core_backend() {
         # configurations.
         if [ "${CT_BARE_METAL},${CT_CANADIAN}" = "y,y" ]; then
             repair_cc="CC_FOR_BUILD=${CT_BUILD}-gcc \
+                       CXX_FOR_BUILD=${CT_BUILD}-g++ \
                        GCC_FOR_TARGET=${CT_TARGET}-gcc"
         else
             repair_cc=""
@@ -688,15 +700,21 @@ do_cc_backend() {
         extra_config+=("--with-mpc=${complibs}")
     fi
     if [ "${CT_CC_GCC_USE_GRAPHITE}" = "y" ]; then
-        extra_config+=("--with-ppl=${complibs}")
-        # With PPL 0.11+, also pull libpwl if needed
-        if [ "${CT_PPL_NEEDS_LIBPWL}" = "y" ]; then
-            host_libstdcxx_flags+=("-L${complibs}/lib")
-            host_libstdcxx_flags+=("-lpwl")
+        if [ "${CT_PPL}" = "y" ]; then
+            extra_config+=("--with-ppl=${complibs}")
+            # With PPL 0.11+, also pull libpwl if needed
+            if [ "${CT_PPL_NEEDS_LIBPWL}" = "y" ]; then
+                host_libstdcxx_flags+=("-L${complibs}/lib")
+                host_libstdcxx_flags+=("-lpwl")
+            fi
+        fi
+        if [ "${CT_ISL}" = "y" ]; then
+            extra_config+=("--with-isl=${complibs}")
         fi
         extra_config+=("--with-cloog=${complibs}")
     elif [ "${CT_CC_GCC_HAS_GRAPHITE}" = "y" ]; then
         extra_config+=("--with-ppl=no")
+        extra_config+=("--with-isl=no")
         extra_config+=("--with-cloog=no")
     fi
     if [ "${CT_CC_GCC_USE_LTO}" = "y" ]; then

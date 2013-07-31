@@ -24,9 +24,14 @@ endif
 # Note: dual test, because if -R and -r are given on the command line
 # (who knows?), MAKEFLAGS contains 'Rr' instead of '-Rr', while adding
 # '-Rr' to MAKEFLAGS adds it literaly ( and does not add 'Rr' )
+# Further: quad test because the flags 'rR' and '-rR' can be reordered.
 ifeq ($(filter Rr,$(MAKEFLAGS)),)
 ifeq ($(filter -Rr,$(MAKEFLAGS)),)
+ifeq ($(filter rR,$(MAKEFLAGS)),)
+ifeq ($(filter -rR,$(MAKEFLAGS)),)
 CT_MAKEFLAGS += -Rr
+endif # No -rR
+endif # No rR
 endif # No -Rr
 endif # No Rr
 
@@ -296,10 +301,9 @@ install-bin: $(DESTDIR)$(bindir)
 
 # If one is hacking crosstool-NG, the patch set might change between any two
 # installations of the same VERSION, thus the patches must be removed prior
-# to being installed. It is simpler to remove the whole lib/ directory, as it
-# is the goal of the install-lib rule to install the lib/ directory...
-install-lib: uninstall-lib          \
-             $(DESTDIR)$(libdir)    \
+# to being installed. It is the responsibility of the user to call uninstall
+# first, if (s)he deems it necessary
+install-lib: $(DESTDIR)$(libdir)    \
              install-lib-main       \
              install-lib-samples
 
