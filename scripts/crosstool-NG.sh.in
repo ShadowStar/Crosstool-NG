@@ -206,7 +206,7 @@ if [    "${CT_SAVE_TARBALLS}" = "y"     \
 fi
 
 # Check now if we can write to the destination directory:
-if [ -d "${CT_INSTALL_DIR}" ]; then
+if [ ! -L "${CT_INSTALL_DIR}" -a -d "${CT_INSTALL_DIR}" ]; then
     CT_TestAndAbort "Destination directory '${CT_INSTALL_DIR}' is not removable" ! -w $(dirname "${CT_INSTALL_DIR}")
 fi
 
