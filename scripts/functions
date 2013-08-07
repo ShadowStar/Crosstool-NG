@@ -1251,7 +1251,9 @@ CT_DoExtractTarballIfExists() {
 
     if [ -f "${tarball}.tar${tar_ext}" ]; then
         CT_DoLog DEBUG "  Restoring '${dir}'"
-        CT_DoForceRmdir "${dir}"
+        if [ "${CT_INSTALL_DIR}" != "${dir}" ]; then
+            CT_DoForceRmdir "${dir}"
+        fi
         CT_DoExecLog DEBUG mkdir -p "${dir}"
         { "${uncompress[@]}" "${tarball}.tar${tar_ext}"     \
           |tar x -C "${dir}" -v -f - "${extra_tar_opts[@]}" ;
