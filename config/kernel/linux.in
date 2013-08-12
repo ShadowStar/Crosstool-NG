@@ -52,7 +52,7 @@ config KERNEL_V_3_5
 
 config KERNEL_V_3_4
     bool
-    prompt "3.4.54"
+    prompt "3.4.57"
 
 config KERNEL_V_3_3
     bool
@@ -165,7 +165,7 @@ config KERNEL_VERSION
     default "3.7.10" if KERNEL_V_3_7
     default "3.6.11" if KERNEL_V_3_6
     default "3.5.7" if KERNEL_V_3_5
-    default "3.4.54" if KERNEL_V_3_4
+    default "3.4.57" if KERNEL_V_3_4
     default "3.3.8" if KERNEL_V_3_3
     default "3.2.48" if KERNEL_V_3_2
     default "3.1.10" if KERNEL_V_3_1
