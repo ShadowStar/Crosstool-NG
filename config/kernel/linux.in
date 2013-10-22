@@ -26,6 +26,10 @@ choice
 # Don't remove next line
 # CT_INSERT_VERSION_BELOW
 
+config KERNEL_V_3_11_6
+    bool
+    prompt "3.11.6"
+
 config KERNEL_V_3_11_5
     bool
     prompt "3.11.5"
@@ -52,7 +56,7 @@ config KERNEL_V_3_11
 
 config KERNEL_V_3_10
     bool
-    prompt "3.10.16 (longterm)"
+    prompt "3.10.17 (longterm)"
 
 config KERNEL_V_3_9
     bool
@@ -187,13 +191,14 @@ config KERNEL_VERSION
     string
 # Don't remove next line
 # CT_INSERT_VERSION_STRING_BELOW
+    default "3.11.6" if KERNEL_V_3_11_6
     default "3.11.5" if KERNEL_V_3_11_5
     default "3.11.4" if KERNEL_V_3_11_4
     default "3.11.3" if KERNEL_V_3_11_3
     default "3.11.2" if KERNEL_V_3_11_2
     default "3.11.1" if KERNEL_V_3_11_1
     default "3.11" if KERNEL_V_3_11
-    default "3.10.16" if KERNEL_V_3_10
+    default "3.10.17" if KERNEL_V_3_10
     default "3.9.11" if KERNEL_V_3_9
     default "3.8.13" if KERNEL_V_3_8
     default "3.7.10" if KERNEL_V_3_7
