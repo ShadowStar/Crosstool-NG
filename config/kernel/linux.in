@@ -80,7 +80,7 @@ config KERNEL_V_3_5
 
 config KERNEL_V_3_4
     bool
-    prompt "3.4.66 (longterm)"
+    prompt "3.4.67 (longterm)"
 
 config KERNEL_V_3_3
     bool
@@ -96,7 +96,7 @@ config KERNEL_V_3_1
 
 config KERNEL_V_3_0
     bool
-    prompt "3.0.100 (longterm)"
+    prompt "3.0.101 (longterm)"
 
 config KERNEL_V_2_6_39
     bool
@@ -204,11 +204,11 @@ config KERNEL_VERSION
     default "3.7.10" if KERNEL_V_3_7
     default "3.6.11" if KERNEL_V_3_6
     default "3.5.7" if KERNEL_V_3_5
-    default "3.4.66" if KERNEL_V_3_4
+    default "3.4.67" if KERNEL_V_3_4
     default "3.3.8" if KERNEL_V_3_3
     default "3.2.51" if KERNEL_V_3_2
     default "3.1.10" if KERNEL_V_3_1
-    default "3.0.100" if KERNEL_V_3_0
+    default "3.0.101" if KERNEL_V_3_0
     default "2.6.39.4" if KERNEL_V_2_6_39
     default "2.6.38.8" if KERNEL_V_2_6_38
     default "2.6.37.6" if KERNEL_V_2_6_37
