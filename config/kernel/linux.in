@@ -100,7 +100,7 @@ config KERNEL_V_2_6_36
 
 config KERNEL_V_2_6_34
     bool
-    prompt "2.6.34.14 (longterm)"
+    prompt "2.6.34.15 (EOL)"
 
 config KERNEL_V_2_6_33
     bool
@@ -193,7 +193,7 @@ config KERNEL_VERSION
     default "2.6.38.8" if KERNEL_V_2_6_38
     default "2.6.37.6" if KERNEL_V_2_6_37
     default "2.6.36.4" if KERNEL_V_2_6_36
-    default "2.6.34.14" if KERNEL_V_2_6_34
+    default "2.6.34.15" if KERNEL_V_2_6_34
     default "2.6.33.20" if KERNEL_V_2_6_33
     default "2.6.32.61" if KERNEL_V_2_6_32
     default "2.6.31.14" if KERNEL_V_2_6_31
