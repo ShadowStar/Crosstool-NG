@@ -1,10 +1,16 @@
 # Companion tools config options
 
-if EXPERIMENTAL
-
 menu "Companion tools"
 
+config COMP_TOOLS_make_3_81_NEEDED
+    bool
+    depends on ! CONFIGURE_has_make381
+    default y
+    select COMP_TOOLS
+    select COMP_TOOLS_make
+
 comment "READ HELP before you say 'Y' below !!!"
+
 config COMP_TOOLS
     bool
     prompt "Build some companion tools"
@@ -44,5 +50,3 @@ config COMP_TOOLS_libtool
 endif
 
 endmenu
-
-endif
