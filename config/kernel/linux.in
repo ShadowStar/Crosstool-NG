@@ -32,7 +32,7 @@ config KERNEL_V_3_14
 
 config KERNEL_V_3_13
     bool
-    prompt "3.13.10"
+    prompt "3.13.11 (EOL)"
 
 config KERNEL_V_3_12
     bool
@@ -180,7 +180,7 @@ config KERNEL_VERSION
 # Don't remove next line
 # CT_INSERT_VERSION_STRING_BELOW
     default "3.14.1" if KERNEL_V_3_14
-    default "3.13.10" if KERNEL_V_3_13
+    default "3.13.11" if KERNEL_V_3_13
     default "3.12.17" if KERNEL_V_3_12
     default "3.11.10" if KERNEL_V_3_11
     default "3.10.37" if KERNEL_V_3_10
