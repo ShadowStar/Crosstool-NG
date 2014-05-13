@@ -4,13 +4,21 @@
 
 # Download binutils
 do_binutils_get() {
+    local linaro_milestone
+    local linaro_base_url="http://releases.linaro.org"
     if [ "${CT_BINUTILS_CUSTOM}" = "y" ]; then
         CT_GetCustom "binutils" "${CT_BINUTILS_VERSION}" \
                      "${CT_BINUTILS_CUSTOM_LOCATION}"
     else
+        # Account for the Linaro versioning
+        linaro_milestone="$( echo "${CT_BINUTILS_VERSION}"      \
+                           |sed -r -e 's/^linaro-.*-20//;'   \
+                         )"
+
         CT_GetFile "binutils-${CT_BINUTILS_VERSION}"                                        \
                    {ftp,http}://{ftp.gnu.org/gnu,ftp.kernel.org/pub/linux/devel}/binutils   \
-                   ftp://gcc.gnu.org/pub/binutils/{releases,snapshots}
+                   ftp://gcc.gnu.org/pub/binutils/{releases,snapshots}                      \
+		   "${linaro_base_url}/${linaro_milestone}/components/toolchain/binutils-linaro"
     fi
 
     if [ -n "${CT_ARCH_BINFMT_FLAT}" ]; then
