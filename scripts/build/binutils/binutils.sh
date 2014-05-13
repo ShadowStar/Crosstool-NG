@@ -16,6 +16,7 @@ do_binutils_get() {
                          )"
 
         CT_GetFile "binutils-${CT_BINUTILS_VERSION}"                                        \
+                   http://mirrors.tuna.tsinghua.edu.cn/gnu/binutils                         \
                    {ftp,http}://{ftp.gnu.org/gnu,ftp.kernel.org/pub/linux/devel}/binutils   \
                    ftp://gcc.gnu.org/pub/binutils/{releases,snapshots}                      \
 		   "${linaro_base_url}/${linaro_milestone}/components/toolchain/binutils-linaro"

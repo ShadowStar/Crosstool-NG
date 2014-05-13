@@ -25,6 +25,7 @@ do_cc_get() {
         # gcc-3.3.3 lives in releases/gcc-3.3.3, while gcc-2.95.* isn't in a
         # subdirectory!
         CT_GetFile "gcc-${CT_CC_VERSION}"                                                       \
+                   http://mirrors.tuna.tsinghua.edu.cn/gnu/gcc/gcc-${CT_CC_VERSION}             \
                    {ftp,http}://ftp.gnu.org/gnu/gcc{,{,/releases}/gcc-${CT_CC_VERSION}}         \
                    ftp://ftp.irisa.fr/pub/mirrors/gcc.gnu.org/gcc/releases/gcc-${CT_CC_VERSION} \
                    ftp://ftp.uvsq.fr/pub/gcc/snapshots/${CT_CC_VERSION}                         \

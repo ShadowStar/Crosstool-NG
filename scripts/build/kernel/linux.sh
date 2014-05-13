@@ -51,6 +51,8 @@ do_kernel_get() {
         esac
         korg_base="http://ftp.kernel.org/pub/linux/kernel/${rel_dir}"
         CT_GetFile "linux-${CT_KERNEL_VERSION}"         \
+                   "http://mirrors.tuna.tsinghua.edu.cn/kernel/${rel_dir}" \
+                   "http://mirrors.aliyun.com/linux-kernel/${rel_dir}" \
                    "${korg_base}"                       \
                    "${korg_base}/longterm/v${k_ver}"    \
                    "${korg_base}/longterm"
