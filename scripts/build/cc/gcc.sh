@@ -4,6 +4,7 @@
 
 # Download gcc
 do_cc_get() {
+    local linaro_milestone
     local linaro_version
     local linaro_series
     local linaro_base_url="http://launchpad.net/gcc-linaro"
@@ -12,6 +13,10 @@ do_cc_get() {
         CT_GetCustom "gcc" "${CT_CC_VERSION}" "${CT_CC_CUSTOM_LOCATION}"
     else
         # Account for the Linaro versioning
+        linaro_milestone="$( echo "${CT_CC_VERSION}"      \
+                           |sed -r -e 's/^linaro-.*-20//;'   \
+                         )"
+
         linaro_version="$( echo "${CT_CC_VERSION}"      \
                            |sed -r -e 's/^linaro-//;'   \
                          )"
@@ -29,6 +34,7 @@ do_cc_get() {
                    {ftp,http}://ftp.gnu.org/gnu/gcc{,{,/releases}/gcc-${CT_CC_VERSION}}         \
                    ftp://ftp.irisa.fr/pub/mirrors/gcc.gnu.org/gcc/releases/gcc-${CT_CC_VERSION} \
                    ftp://ftp.uvsq.fr/pub/gcc/snapshots/${CT_CC_VERSION}                         \
+                   "http://releases.linaro.org/${linaro_milestone}/components/toolchain/gcc-linaro/${linaro_series}" \
                    "${linaro_base_url}/${linaro_series}/${linaro_version}/+download"
 
     fi # ! custom location
