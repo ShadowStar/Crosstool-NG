@@ -10,14 +10,21 @@ LIBC_NEWLIB_AVR_HDRS_BASE="avr-headers-3.2.3.970"
 LIBC_NEWLIB_AVR_HDRS_EXT=".zip"
 
 do_libc_get() {
+    local linaro_milestone
     local libc_src="ftp://sourceware.org/pub/newlib"
 
     if [ "${CT_LIBC_NEWLIB_CUSTOM}" = "y" ]; then
         CT_GetCustom "newlib" "${CT_LIBC_VERSION}"      \
                      "${CT_LIBC_NEWLIB_CUSTOM_LOCATION}"
     else # ! custom location
+        # Account for the Linaro versioning
+        linaro_milestone="$( echo "${CT_LIBC_VERSION}"      \
+                           |sed -r -e 's/^linaro-.*-20//;'   \
+                         )"
+
         CT_GetFile "newlib-${CT_LIBC_VERSION}" ${libc_src} \
-            http://mirrors.kernel.org/sources.redhat.com/newlib
+            http://mirrors.kernel.org/sources.redhat.com/newlib \
+            http://releases.linaro.org/${linaro_milestone}/components/toolchain/newlib-linaro
     fi # ! custom location
 
     if [ "${CT_ATMEL_AVR32_HEADERS}" = "y" ]; then
