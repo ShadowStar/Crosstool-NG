@@ -16,6 +16,18 @@ do_libc_get() {
     local -a extra_addons
     local svn_base
 
+    if [[ "${CT_LIBC_VERSION}" == linaro-* ]]; then
+        local linaro_milestone
+        # Account for the Linaro versioning
+        linaro_milestone="$( echo "${CT_LIBC_VERSION}"      \
+                           |sed -r -e 's/^linaro-.*-20//;'   \
+                         )"
+
+        CT_GetFile "eglibc-${CT_LIBC_VERSION}" \
+                   "http://releases.linaro.org/${linaro_milestone}/components/toolchain/eglibc-linaro"
+	return 0
+    fi
+
     if [ "${CT_EGLIBC_HTTP}" = "y" ]; then
         svn_base="http://www.eglibc.org/svn"
     else
