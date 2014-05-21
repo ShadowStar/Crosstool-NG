@@ -1,0 +1,12 @@
+diff --git a/scripts/unifdef.c b/scripts/unifdef.c
+--- a/scripts/unifdef.c
++++ b/scripts/unifdef.c
+@@ -72,7 +72,7 @@
+ #include <string.h>
+ #include <unistd.h>
+ 
+-size_t strlcpy(char *dst, const char *src, size_t siz);
++//size_t strlcpy(char *dst, const char *src, size_t siz);
+ 
+ /* types of input lines: */
+ typedef enum {
