@@ -1,0 +1,19 @@
+--- a/arch/x86/tools/relocs.h
++++ b/arch/x86/tools/relocs.h
+@@ -9,10 +9,16 @@
+ #include <string.h>
+ #include <errno.h>
+ #include <unistd.h>
++#ifdef __APPLE__
++#include "/opt/include/elf.h"
++#include "/opt/include/byteswap.h"
++#include <machine/endian.h>
++#else
+ #include <elf.h>
+ #include <byteswap.h>
+ #define USE_BSD
+ #include <endian.h>
++#endif
+ #include <regex.h>
+ #include <tools/le_byteshift.h>
+ 
