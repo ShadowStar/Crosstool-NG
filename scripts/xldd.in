@@ -114,6 +114,13 @@ _EOF_
 
 # Parse command line options
 root="${CT_XLDD_ROOT}"
+if [ $# == 0 ]; then
+    show_help
+    exit 0
+fi
+if [ -z "${root}" ]; then
+    root="$( dirname "${0}" )/../@@CT_TARGET@@/@@CT_SYSROOT@@"
+fi
 show_system=
 while true; do
     case "${1}" in

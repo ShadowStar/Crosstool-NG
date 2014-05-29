@@ -81,6 +81,7 @@ do_finish() {
                -e 's|@@CT_grep@@|'"${grep}"'|g;'            \
                -e 's|@@CT_make@@|'"${make}"'|g;'            \
                -e 's|@@CT_sed@@|'"${sed}"'|g;'              \
+               -e 's|@@CT_SYSROOT@@|'"${CT_SYSROOT_REL_DIR}"'|g;' \
                "${CT_LIB_DIR}/scripts/xldd.in"              \
                >"${CT_PREFIX_DIR}/bin/${CT_TARGET}-ldd"
         CT_DoExecLog ALL chmod 755 "${CT_PREFIX_DIR}/bin/${CT_TARGET}-ldd"
