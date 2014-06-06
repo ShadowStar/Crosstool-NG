@@ -1,0 +1,68 @@
+--- a/lto-plugin/configure
++++ b/lto-plugin/configure
+@@ -4088,7 +4088,35 @@
+ CFLAGS="$save_CFLAGS"
+ 
+ # Need -Wc to get it through libtool.
+-if test "x$GCC" = xyes; then ac_lto_plugin_ldflags="-Wc,-static-libgcc"; fi
++have_static_libgcc=no
++if test "x$GCC" = xyes; then
++  saved_LDFLAGS="$LDFLAGS"
++  LDFLAGS="$LDFLAGS -Wc,-static-libgcc"
++  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether $CC accepts -Wc,-static-libgcc" >&5
++$as_echo_n "checking whether $CC accepts -Wc,-static-libgcc... " >&6; }
++
++cat confdefs.h - <<_ACEOF >conftest.$ac_ext
++/* end confdefs.h.  */
++#if (__clang__)
++#error -Wc,-static-libgcc not implemented
++#endif
++int main() {}
++_ACEOF
++if ac_fn_c_try_link "$LINENO"; then :
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
++$as_echo "yes" >&6; }; have_static_libgcc=yes
++else
++  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
++$as_echo "no" >&6; }
++fi
++rm -f core conftest.err conftest.$ac_objext \
++    conftest$ac_exeext conftest.$ac_ext
++
++  LDFLAGS="$saved_LDFLAGS"
++fi
++if test "$have_static_libgcc" = yes; then
++  ac_lto_plugin_ldflags="-Wc,-static-libgcc"
++fi
+ 
+ case `pwd` in
+   *\ * | *\	*)
+--- a/lto-plugin/configure.ac
++++ b/lto-plugin/configure.ac
+@@ -8,7 +8,25 @@
+ AC_SYS_LARGEFILE
+ ACX_PROG_CC_WARNING_OPTS([-Wall], [ac_lto_plugin_warn_cflags])
+ # Need -Wc to get it through libtool.
+-if test "x$GCC" = xyes; then ac_lto_plugin_ldflags="-Wc,-static-libgcc"; fi
++have_static_libgcc=no
++if test "$GCC" = yes; then
++  saved_LDFLAGS="$LDFLAGS"
++
++  LDFLAGS="$LDFLAGS -Wc,-static-libgcc"
++  AC_MSG_CHECKING([whether CC accepts -Wc,-static-libgcc])
++  AC_LINK_IFELSE([
++#if (__clang__)
++#error -Wc,-static-libgcc not implemented
++#endif
++int main() {}],
++    [AC_MSG_RESULT([yes]); have_static_libgcc=yes],
++    [AC_MSG_RESULT([no])])
++
++  LDFLAGS="$saved_LDFLAGS"
++fi
++if test "$have_static_libgcc" = yes; then
++  ac_lto_plugin_ldflags="-Wc,-static-libgcc"
++fi
+ AC_SUBST(ac_lto_plugin_ldflags)
+ AM_PROG_LIBTOOL
+ ACX_LT_HOST_FLAGS

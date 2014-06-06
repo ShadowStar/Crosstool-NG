@@ -38,6 +38,12 @@ config GDB_V_7_7_1
     prompt "7.7.1"
     select GDB_7_2_or_later
 
+config GDB_V_linaro_7_7_2014_05
+    bool
+    prompt "linaro-7.7-2014.05"
+    depends on DEBUG_GDB_SHOW_LINARO
+    select GDB_7_2_or_later
+
 config GDB_V_7_6_2
     bool
     prompt "7.6.2"
@@ -157,6 +163,7 @@ config GDB_VERSION
 # CT_INSERT_VERSION_STRING_BELOW
     default "7.7.1" if GDB_V_7_7_1
     default "7.6.2" if GDB_V_7_6_2
+    default "linaro-7.7-2014.05" if GDB_V_linaro_7_7_2014_05
     default "linaro-7.6.1-2013.10" if GDB_V_linaro_7_6_1_2013_10
     default "linaro-7.6-2013.05" if GDB_V_linaro_7_6_2013_05
     default "7.5.1" if GDB_V_7_5_1
