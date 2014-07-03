@@ -33,7 +33,7 @@ choice
 # Don't remove next line
 # CT_INSERT_VERSION_BELOW
 
-config GDB_V_7_7_1
+config GDB_V_7_7
     bool
     prompt "7.7.1"
     select GDB_7_2_or_later
@@ -44,7 +44,7 @@ config GDB_V_linaro_7_7
     depends on DEBUG_GDB_SHOW_LINARO
     select GDB_7_2_or_later
 
-config GDB_V_7_6_2
+config GDB_V_7_6
     bool
     prompt "7.6.2"
     select GDB_7_2_or_later
@@ -55,7 +55,7 @@ config GDB_V_linaro_7_6
     depends on DEBUG_GDB_SHOW_LINARO
     select GDB_7_2_or_later
 
-config GDB_V_7_5_1
+config GDB_V_7_5
     bool
     prompt "7.5.1"
     select GDB_7_2_or_later
@@ -72,14 +72,9 @@ config GDB_V_linaro_7_4
     depends on DEBUG_GDB_SHOW_LINARO
     select GDB_7_2_or_later
 
-config GDB_V_7_4_1
-    bool
-    prompt "7.4.1"
-    select GDB_7_2_or_later
-
 config GDB_V_7_4
     bool
-    prompt "7.4"
+    prompt "7.4.1"
     select GDB_7_2_or_later
 
 config GDB_V_linaro_7_3
@@ -88,14 +83,9 @@ config GDB_V_linaro_7_3
     depends on DEBUG_GDB_SHOW_LINARO
     select GDB_7_2_or_later
 
-config GDB_V_7_3_1
+config GDB_V_7_3
     bool
     prompt "7.3.1"
-    select GDB_7_2_or_later
-
-config GDB_V_7_3a
-    bool
-    prompt "7.3a"
     select GDB_7_2_or_later
 
 config GDB_V_linaro_7_2
@@ -104,27 +94,22 @@ config GDB_V_linaro_7_2
     depends on DEBUG_GDB_SHOW_LINARO
     select GDB_7_2_or_later
 
-config GDB_V_7_2a
+config GDB_V_7_2
     bool
     prompt "7.2a"
     select GDB_7_2_or_later
 
-config GDB_V_7_1a
+config GDB_V_7_1
     bool
     prompt "7.1a"
     select GDB_7_0_or_later
 
-config GDB_V_7_0_1a
+config GDB_V_7_0
     bool
     prompt "7.0.1a"
     select GDB_7_0_or_later
 
-config GDB_V_7_0a
-    bool
-    prompt "7.0a"
-    select GDB_7_0_or_later
-
-config GDB_V_6_8a
+config GDB_V_6_8
     bool
     prompt "6.8a"
 
@@ -155,24 +140,21 @@ config GDB_VERSION
     string
 # Don't remove next line
 # CT_INSERT_VERSION_STRING_BELOW
-    default "7.7.1" if GDB_V_7_7_1
-    default "7.6.2" if GDB_V_7_6_2
+    default "7.7.1" if GDB_V_7_7
+    default "7.6.2" if GDB_V_7_6
     default "linaro-7.7.1-2014.06-1" if GDB_V_linaro_7_7
     default "linaro-7.6.1-2013.10" if GDB_V_linaro_7_6
-    default "7.5.1" if GDB_V_7_5_1
+    default "7.5.1" if GDB_V_7_5
     default "linaro-7.5-2012.12-1" if GDB_V_linaro_7_5
     default "linaro-7.4-2012.06" if GDB_V_linaro_7_4
-    default "7.4.1" if GDB_V_7_4_1
-    default "7.4" if GDB_V_7_4
+    default "7.4.1" if GDB_V_7_4
     default "linaro-7.3-2011.12" if GDB_V_linaro_7_3
-    default "7.3.1" if GDB_V_7_3_1
-    default "7.3a" if GDB_V_7_3a
+    default "7.3.1" if GDB_V_7_3
     default "linaro-7.2-2011.05-0" if GDB_V_linaro_7_2
-    default "7.2a" if GDB_V_7_2a
-    default "7.1a" if GDB_V_7_1a
-    default "7.0.1a" if GDB_V_7_0_1a
-    default "7.0a" if GDB_V_7_0a
-    default "6.8a" if GDB_V_6_8a
+    default "7.2a" if GDB_V_7_2
+    default "7.1a" if GDB_V_7_1
+    default "7.0.1a" if GDB_V_7_0
+    default "6.8a" if GDB_V_6_8
     default "custom" if GDB_CUSTOM
 
 if GDB_CUSTOM
