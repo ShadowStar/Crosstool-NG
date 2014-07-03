@@ -33,9 +33,15 @@ do_debug_gdb_parts() {
 }
 
 do_debug_gdb_get() {
+    local linaro_milestone
     local linaro_version
     local linaro_series
     local linaro_base_url="http://launchpad.net/gdb-linaro"
+
+    # Account for the Linaro versioning
+    linaro_milestone="$( echo "${CT_GDB_VERSION}"      \
+                         |sed -r -e 's/^linaro-.*-20//;' -e 's/-.*//;'  \
+                       )"
 
     # Account for the Linaro versioning
     linaro_version="$( echo "${CT_GDB_VERSION}"      \
@@ -54,6 +60,7 @@ do_debug_gdb_get() {
             CT_GetFile "gdb-${CT_GDB_VERSION}"                          \
                        {ftp,http}://ftp.gnu.org/pub/gnu/gdb             \
                        ftp://sources.redhat.com/pub/gdb/{,old-}releases \
+		       "http://releases.linaro.org/${linaro_milestone}/components/toolchain/gdb-linaro" \
                        "${linaro_base_url}/${linaro_series}/${linaro_version}/+download"
         fi
     fi
