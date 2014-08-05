@@ -111,20 +111,8 @@ addToolVersion() {
             # Extract 'M'ajor and 'm'inor from version string
             ver_M=$(getVersionField "${version}" . 1)
             ver_m=$(getVersionField "${version}" . 2)
-            if [   \( ${ver_M} -eq 4 -a ${ver_m} -eq 8 \)  ]; then
-                SedExpr1="${SedExpr1}\n    select CC_GCC_4_8"
-            elif [ \( ${ver_M} -eq 4 -a ${ver_m} -eq 7 \)  ]; then
-                SedExpr1="${SedExpr1}\n    select CC_GCC_4_7"
-            elif [ \( ${ver_M} -eq 4 -a ${ver_m} -eq 6 \)  ]; then
-                SedExpr1="${SedExpr1}\n    select CC_GCC_4_6"
-            elif [ \( ${ver_M} -eq 4 -a ${ver_m} -eq 5 \)  ]; then
-                SedExpr1="${SedExpr1}\n    select CC_GCC_4_5"
-            elif [ \( ${ver_M} -eq 4 -a ${ver_m} -eq 4 \)  ]; then
-                SedExpr1="${SedExpr1}\n    select CC_GCC_4_4"
-            elif [ \( ${ver_M} -eq 4 -a ${ver_m} -eq 3 \)  ]; then
-                SedExpr1="${SedExpr1}\n    select CC_GCC_4_3"
-            elif [ \( ${ver_M} -eq 4 -a ${ver_m} -eq 2 \)  ]; then
-                SedExpr1="${SedExpr1}\n    select CC_GCC_4_2"
+            if [ ${ver_M} -ge 4 ] && [ ${ver_m} -ge 2 ]; then
+                SedExpr1="${SedExpr1}\n    select CC_GCC_${ver_M}_${ver_m}"
             fi
             ;;
         binutils)
@@ -167,7 +155,11 @@ addToolVersion() {
             # gdb-7.0 and above have special handling
             ver_M=$(getVersionField "${version}" . 1)
             if [ ${ver_M} -ge 7 ]; then
-                SedExpr1="${SedExpr1}\n    select GDB_7_0_or_later"
+                if [ ${ver_m} -ge 2 ]; then
+                    SedExpr1="${SedExpr1}\n    select GDB_7_2_or_later"
+                else
+                    SedExpr1="${SedExpr1}\n    select GDB_7_0_or_later"
+                fi
             fi
             ;;
     esac
