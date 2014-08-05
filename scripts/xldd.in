@@ -3,7 +3,6 @@
 # NON-CONFIGURABLE STUFF!
 export LC_ALL=C
 version="@@CT_VERSION@@"
-bits="@@CT_BITS@@"
 sed="${SED:-@@CT_sed@@}"
 grep="${GREP:-@@CT_grep@@}"
 
@@ -14,7 +13,8 @@ readelf="${prefix}-readelf"
 fake_load_addr_root="$((0xdeadbeef))"
 fake_load_addr_rpath="$((0xdeadc0de))"
 fake_load_addr_sysroot="$((0x8badf00d))"
-ld_library_path="/lib:/usr/lib"
+ld_library_path="/lib:/lib32:/lib64:/usr/lib:/usr/lib32:/usr/lib64"
+verbose=${CT_XLDD_VERBOSE}
 
 do_error() {
     printf "%s: %s\n" "${my_name}" "$*" >&2
@@ -28,7 +28,7 @@ do_opt_error() {
 do_trace() {
     local depth=0
 
-    [ -z "${CT_XLDD_VERBOSE}" ] && return 0
+    [ -z "${verbose}" ] && return 0
 
     for((depth=0; "${#FUNCNAME[$((depth+1))]}" != 0; depth++)); do :; done
     printf "%*s" $((4*(depth-1))) "" >&2
@@ -142,6 +142,9 @@ while true; do
         --show-system|-s)
             show_system=1
             ;;
+        --verbose|-v)
+	    verbose=1
+	    ;;
         -*)
             do_opt_error "unrecognized option \`${1}'"
             exit 1
@@ -331,13 +334,15 @@ do_scan_etc_ldsoconf() {
     do_trace "Finished parsing ld.so.conf: '%s'\n" "${ldsoconf}"
 }
 
+bits=$( ${readelf} -h ${1} 2>/dev/null | ${grep} "^\s*Class:" | awk -F'ELF' '{ print $2 }' )
+
 # Build up the full list of search directories
 declare -a needed_search_path
 do_trace "Adding basic lib dirs\n"
 ld_library_path="${ld_library_path}:"
 while [ -n "${ld_library_path}" ]; do
     d="${ld_library_path%%:*}"
-    if [ -n "${d}" ]; then
+    if [[ -n "${d}" && "${d}" =~ lib$ || "${d}" =~ lib${bits} ]]; then
         do_trace "-> adding search dir '%s'\n" "${d}"
         needed_search_path+=( "${d}" )
     fi
