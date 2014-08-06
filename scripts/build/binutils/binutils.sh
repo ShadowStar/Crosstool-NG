@@ -12,7 +12,7 @@ do_binutils_get() {
     else
         # Account for the Linaro versioning
         linaro_milestone="$( echo "${CT_BINUTILS_VERSION}"      \
-                           |sed -r -e 's/^linaro-.*-20//;'   \
+                           |sed -r -e 's/^linaro-.*-20//;' -e 's/-.*//;' \
                          )"
 
         CT_GetFile "binutils-${CT_BINUTILS_VERSION}"                                        \

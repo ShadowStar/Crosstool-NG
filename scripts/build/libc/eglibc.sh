@@ -20,7 +20,7 @@ do_libc_get() {
         local linaro_milestone
         # Account for the Linaro versioning
         linaro_milestone="$( echo "${CT_LIBC_VERSION}"      \
-                           |sed -r -e 's/^linaro-.*-20//;'   \
+                           |sed -r -e 's/^linaro-.*-20//;' -e 's/-.*//;' \
                          )"
 
         CT_GetFile "eglibc-${CT_LIBC_VERSION}" \

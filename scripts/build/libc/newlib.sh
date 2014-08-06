@@ -19,7 +19,7 @@ do_libc_get() {
     else # ! custom location
         # Account for the Linaro versioning
         linaro_milestone="$( echo "${CT_LIBC_VERSION}"      \
-                           |sed -r -e 's/^linaro-.*-20//;'   \
+                           |sed -r -e 's/^linaro-.*-20//;' -e 's/-.*//;' \
                          )"
 
         CT_GetFile "newlib-${CT_LIBC_VERSION}" ${libc_src} \

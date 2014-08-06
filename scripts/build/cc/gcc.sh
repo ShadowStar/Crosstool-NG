@@ -14,7 +14,7 @@ do_cc_get() {
     else
         # Account for the Linaro versioning
         linaro_milestone="$( echo "${CT_CC_VERSION}"      \
-                           |sed -r -e 's/^linaro-.*-20//;'   \
+                           |sed -r -e 's/^linaro-.*-20//;' -e 's/-.*//;'  \
                          )"
 
         linaro_version="$( echo "${CT_CC_VERSION}"      \
