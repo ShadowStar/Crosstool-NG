@@ -20,7 +20,7 @@ choice
 
 config LIBC_EGLIBC_V_linaro_2_19
     bool
-    prompt "linaro-2.19-2014.06"
+    prompt "linaro-2.19-2014.07"
     depends on CC_GCC_SHOW_LINARO
     select LIBC_EGLIBC_2_16_or_later
 
@@ -94,7 +94,7 @@ config LIBC_VERSION
     string
 # Don't remove next line
 # CT_INSERT_VERSION_STRING_BELOW
-    default "linaro-2.19-2014.06" if LIBC_EGLIBC_V_linaro_2_19
+    default "linaro-2.19-2014.07" if LIBC_EGLIBC_V_linaro_2_19
     default "linaro-2.18-2013.10" if LIBC_EGLIBC_V_linaro_2_18
     default "2_18" if LIBC_EGLIBC_V_2_18
     default "2_17" if LIBC_EGLIBC_V_2_17
