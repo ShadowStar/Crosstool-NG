@@ -1391,7 +1391,11 @@ CT_DoLoadState(){
         y)  gzip -dc "${state_dir}/log.gz" >"${tmp_log_file}";;
         *)  cat "${state_dir}/log" >"${tmp_log_file}";;
     esac
-    cat "${state_dir}/tail.log" >>"${tmp_log_file}"
+    if [ "${CT_LOG_TO_FILE}" = "y" ]; then
+        cat "${state_dir}/tail.log" >>"${tmp_log_file}"
+    fi
     exec >>"${tmp_log_file}"
-    rm -f "${state_dir}/tail.log"
+    if [ "${CT_LOG_TO_FILE}" = "y" ]; then
+        rm -f "${state_dir}/tail.log"
+    fi
 }
