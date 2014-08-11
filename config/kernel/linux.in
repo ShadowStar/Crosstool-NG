@@ -32,11 +32,11 @@ config KERNEL_V_3_16
 
 config KERNEL_V_3_15
     bool
-    prompt "3.15.8"
+    prompt "3.15.9"
 
 config KERNEL_V_3_14
     bool
-    prompt "3.14.15 (longterm)"
+    prompt "3.14.16 (longterm)"
 
 config KERNEL_V_3_12
     bool
@@ -44,11 +44,11 @@ config KERNEL_V_3_12
 
 config KERNEL_V_3_10
     bool
-    prompt "3.10.51 (longterm)"
+    prompt "3.10.52 (longterm)"
 
 config KERNEL_V_3_4
     bool
-    prompt "3.4.101 (longterm)"
+    prompt "3.4.102 (longterm)"
 
 config KERNEL_V_3_2
     bool
@@ -94,11 +94,11 @@ config KERNEL_VERSION
 # Don't remove next line
 # CT_INSERT_VERSION_STRING_BELOW
     default "3.16" if KERNEL_V_3_16
-    default "3.15.8" if KERNEL_V_3_15
-    default "3.14.15" if KERNEL_V_3_14
+    default "3.15.9" if KERNEL_V_3_15
+    default "3.14.16" if KERNEL_V_3_14
     default "3.12.26" if KERNEL_V_3_12
-    default "3.10.51" if KERNEL_V_3_10
-    default "3.4.101" if KERNEL_V_3_4
+    default "3.10.52" if KERNEL_V_3_10
+    default "3.4.102" if KERNEL_V_3_4
     default "3.2.62" if KERNEL_V_3_2
     default "2.6.32.63" if KERNEL_V_2_6_32
     default "custom" if KERNEL_LINUX_CUSTOM
