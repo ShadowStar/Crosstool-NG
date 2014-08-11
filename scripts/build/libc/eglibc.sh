@@ -25,7 +25,7 @@ do_libc_get() {
 
         CT_GetFile "eglibc-${CT_LIBC_VERSION}" \
                    "http://releases.linaro.org/${linaro_milestone}/components/toolchain/eglibc-linaro"
-	return 0
+        return 0
     fi
 
     if [ "${CT_EGLIBC_HTTP}" = "y" ]; then
@@ -136,7 +136,11 @@ do_libc_locales() {
     CT_DoLog EXTRA "Configuring C library localedef"
 
     if [ "${CT_LIBC_EGLIBC_HAS_PKGVERSION_BUGURL}" = "y" ]; then
-        extra_config+=("--with-pkgversion=${CT_PKGVERSION}")
+        localversion=${CT_PKGVERSION}
+        if [[ "${CT_LIBC_VERSION}" =~ linaro && -z "${CT_TOOLCHAIN_PKGVERSION}" ]]; then
+            localversion+=" - Linaro $(echo "${CT_LIBC_VERSION}" | sed -r -e 's/^linaro-.*20/20/')"
+        fi
+        extra_config+=("--with-pkgversion=${localversion}")
         [ -n "${CT_TOOLCHAIN_BUGURL}" ] && extra_config+=("--with-bugurl=${CT_TOOLCHAIN_BUGURL}")
     fi
 

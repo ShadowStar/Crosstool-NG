@@ -276,7 +276,11 @@ do_libc_backend_once() {
         *)  extra_config+=("--enable-add-ons=$(do_libc_add_ons_list ,)");;
     esac
 
-    extra_config+=("--with-pkgversion=${CT_PKGVERSION}")
+    localversion=${CT_PKGVERSION}
+    if [[ "${CT_LIBC_VERSION}" =~ linaro && -z "${CT_TOOLCHAIN_PKGVERSION}" ]]; then
+        localversion+=" - Linaro $(echo "${CT_LIBC_VERSION}" | sed -r -e 's/^linaro-.*20/20/')"
+    fi
+    extra_config+=("--with-pkgversion=${localversion}")
     [ -n "${CT_TOOLCHAIN_BUGURL}" ] && extra_config+=("--with-bugurl=${CT_TOOLCHAIN_BUGURL}")
 
     # Extract the endianness options if any

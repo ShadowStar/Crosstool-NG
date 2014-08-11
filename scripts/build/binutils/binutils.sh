@@ -19,7 +19,7 @@ do_binutils_get() {
                    http://mirrors.tuna.tsinghua.edu.cn/gnu/binutils                         \
                    {ftp,http}://{ftp.gnu.org/gnu,ftp.kernel.org/pub/linux/devel}/binutils   \
                    ftp://gcc.gnu.org/pub/binutils/{releases,snapshots}                      \
-		   "${linaro_base_url}/${linaro_milestone}/components/toolchain/binutils-linaro"
+                   "${linaro_base_url}/${linaro_milestone}/components/toolchain/binutils-linaro"
     fi
 
     if [ -n "${CT_ARCH_BINFMT_FLAT}" ]; then
@@ -200,7 +200,11 @@ do_binutils_backend() {
         extra_config+=( --enable-plugins )
     fi
     if [ "${CT_BINUTILS_HAS_PKGVERSION_BUGURL}" = "y" ]; then
-        extra_config+=("--with-pkgversion=${CT_PKGVERSION}")
+        localversion=${CT_PKGVERSION}
+        if [[ "${CT_BINUTILS_VERSION}" =~ linaro && -z "${CT_TOOLCHAIN_PKGVERSION}" ]]; then
+            localversion+=" - Linaro $(echo "${CT_BINUTILS_VERSION}" | sed -r -e 's/^linaro-.*20/20/')"
+        fi
+        extra_config+=("--with-pkgversion=${localversion}")
         [ -n "${CT_TOOLCHAIN_BUGURL}" ] && extra_config+=("--with-bugurl=${CT_TOOLCHAIN_BUGURL}")
     fi
     if [ "${CT_MULTILIB}" = "y" ]; then
@@ -342,7 +346,11 @@ do_binutils_for_target() {
         CT_DoLog EXTRA "Configuring binutils for target"
 
         if [ "${CT_BINUTILS_HAS_PKGVERSION_BUGURL}" = "y" ]; then
-            extra_config+=("--with-pkgversion=${CT_PKGVERSION}")
+            localversion=${CT_PKGVERSION}
+            if [[ "${CT_BINUTILS_VERSION}" =~ linaro && -z "${CT_TOOLCHAIN_PKGVERSION}" ]]; then
+                localversion+=" - Linaro $(echo "${CT_BINUTILS_VERSION}" | sed -r -e 's/^linaro-.*20/20/;')"
+            fi
+            extra_config+=("--with-pkgversion=${localversion}")
             [ -n "${CT_TOOLCHAIN_BUGURL}" ] && extra_config+=("--with-bugurl=${CT_TOOLCHAIN_BUGURL}")
         fi
         if [ "${CT_MULTILIB}" = "y" ]; then

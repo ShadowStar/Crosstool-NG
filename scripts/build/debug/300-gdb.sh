@@ -60,7 +60,7 @@ do_debug_gdb_get() {
             CT_GetFile "gdb-${CT_GDB_VERSION}"                          \
                        {ftp,http}://ftp.gnu.org/pub/gnu/gdb             \
                        ftp://sources.redhat.com/pub/gdb/{,old-}releases \
-		       "http://releases.linaro.org/${linaro_milestone}/components/toolchain/gdb-linaro" \
+                       "http://releases.linaro.org/${linaro_milestone}/components/toolchain/gdb-linaro" \
                        "${linaro_base_url}/${linaro_series}/${linaro_version}/+download"
         fi
     fi
@@ -115,7 +115,11 @@ do_debug_gdb_build() {
     esac
 
     if [ "${CT_GDB_HAS_PKGVERSION_BUGURL}" = "y" ]; then
-        extra_config+=("--with-pkgversion=${CT_PKGVERSION}")
+        localversion=${CT_PKGVERSION}
+        if [[ "${CT_GDB_VERSION}" =~ linaro && -z "${CT_TOOLCHAIN_PKGVERSION}" ]]; then
+            localversion+=" - Linaro $(echo "${CT_GDB_VERSION}" | sed -r -e 's/^linaro-.*20/20/')"
+        fi
+        extra_config+=("--with-pkgversion=${localversion}")
         [ -n "${CT_TOOLCHAIN_BUGURL}" ] && extra_config+=("--with-bugurl=${CT_TOOLCHAIN_BUGURL}")
     fi
 
