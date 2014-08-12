@@ -1,0 +1,21 @@
+diff -urN ppl-0.11.orig/m4/ac_cxx_flexible_arrays.m4 ppl-0.11/m4/ac_cxx_flexible_arrays.m4
+--- ppl-0.11.orig/m4/ac_cxx_flexible_arrays.m4	2010-08-02 13:21:24.000000000 -0700
++++ ppl-0.11/m4/ac_cxx_flexible_arrays.m4	2014-03-12 08:43:21.000000000 -0700
+@@ -40,6 +40,8 @@
+   A()
+     : i(0), b(false) {
+   }
++
++  ~A() {}
+ };
+ 
+ class B {
+@@ -89,6 +91,8 @@
+   A()
+     : i(0), b(false) {
+   }
++
++  ~A() {}
+ };
+ 
+ class B {
