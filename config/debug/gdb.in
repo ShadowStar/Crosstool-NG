@@ -33,6 +33,17 @@ choice
 # Don't remove next line
 # CT_INSERT_VERSION_BELOW
 
+config GDB_V_7_8
+    bool
+    prompt "7.8"
+    select GDB_7_2_or_later
+
+config GDB_V_linaro_7_8
+    bool
+    prompt "linaro-7.8-2014.08"
+    depends on DEBUG_GDB_SHOW_LINARO
+    select GDB_7_2_or_later
+
 config GDB_V_7_7
     bool
     prompt "7.7.1"
@@ -140,6 +151,8 @@ config GDB_VERSION
     string
 # Don't remove next line
 # CT_INSERT_VERSION_STRING_BELOW
+    default "7.8" if GDB_V_7_8
+    default "linaro-7.8-2014.08" if GDB_V_linaro_7_8
     default "7.7.1" if GDB_V_7_7
     default "7.6.2" if GDB_V_7_6
     default "linaro-7.7.1-2014.06-1" if GDB_V_linaro_7_7
