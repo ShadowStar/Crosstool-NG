@@ -20,7 +20,7 @@ choice
 
 config LIBC_NEWLIB_V_linaro_2_1_0
     bool
-    prompt "linaro-2.1.0-2014.02"
+    prompt "linaro-2.1.0-2014.09"
     depends on CC_GCC_SHOW_LINARO
     depends on EXPERIMENTAL
 
@@ -73,7 +73,7 @@ config LIBC_VERSION
     string
 # Don't remove next line
 # CT_INSERT_VERSION_STRING_BELOW
-    default "linaro-2.1.0-2014.02" if LIBC_NEWLIB_V_linaro_2_1_0
+    default "linaro-2.1.0-2014.09" if LIBC_NEWLIB_V_linaro_2_1_0
     default "2.1.0" if LIBC_NEWLIB_V_2_1_0
     default "2.0.0" if LIBC_NEWLIB_V_2_0_0
     default "1.20.0" if LIBC_NEWLIB_V_1_20_0
