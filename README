@@ -1,3 +1,13 @@
+# This is my fork of Crosstool-NG
+
+Patches for build on OS X.
+
+Add Linaro-ARM's configuration.
+
+Tested target: ARM, AArch64, i686 & x86_64
+
+# Original README of crosstool-NG
+
 This is the README for crosstool-NG
 
 Crosstool-NG follows the autoconf dance. So, to get you
