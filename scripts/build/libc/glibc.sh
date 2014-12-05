@@ -15,14 +15,21 @@ do_libc_get() {
     local date
     local version
     local -a addons_list
+    local linaro_milestone
 
     addons_list=($(do_libc_add_ons_list " "))
+
+    # Account for the Linaro versioning
+    linaro_milestone="$( echo "${CT_LIBC_VERSION}"      \
+                       |sed -r -e 's/^linaro-.*-20//;' -e 's/-.*//;' \
+                     )"
 
     # Main source
     CT_GetFile "glibc-${CT_LIBC_VERSION}"               \
                {ftp,http}://ftp.gnu.org/gnu/glibc       \
                ftp://gcc.gnu.org/pub/glibc/releases     \
-               ftp://gcc.gnu.org/pub/glibc/snapshots
+               ftp://gcc.gnu.org/pub/glibc/snapshots    \
+               http://releases.linaro.org/${linaro_milestone}/components/toolchain/glibc-linaro
 
     # C library addons
     for addon in "${addons_list[@]}"; do
