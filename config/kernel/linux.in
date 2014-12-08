@@ -26,37 +26,37 @@ choice
 # Don't remove next line
 # CT_INSERT_VERSION_BELOW
 
-config KERNEL_V_3_16
+config KERNEL_V_3_18
     bool
-    prompt "3.16"
+    prompt "3.18"
 
-config KERNEL_V_3_15
+config KERNEL_V_3_17
     bool
-    prompt "3.15.9"
+    prompt "3.17.6"
 
 config KERNEL_V_3_14
     bool
-    prompt "3.14.16 (longterm)"
+    prompt "3.14.26 (longterm)"
 
 config KERNEL_V_3_12
     bool
-    prompt "3.12.26 (longterm)"
+    prompt "3.12.34 (longterm)"
 
 config KERNEL_V_3_10
     bool
-    prompt "3.10.52 (longterm)"
+    prompt "3.10.62 (longterm)"
 
 config KERNEL_V_3_4
     bool
-    prompt "3.4.102 (longterm)"
+    prompt "3.4.105 (longterm)"
 
 config KERNEL_V_3_2
     bool
-    prompt "3.2.62 (longterm)"
+    prompt "3.2.64 (longterm)"
 
 config KERNEL_V_2_6_32
     bool
-    prompt "2.6.32.63 (longterm)"
+    prompt "2.6.32.64 (longterm)"
     help
       The Linux 2.6.32 tree is a "longterm" maintenance branch.
       
@@ -93,14 +93,14 @@ config KERNEL_VERSION
     string
 # Don't remove next line
 # CT_INSERT_VERSION_STRING_BELOW
-    default "3.16" if KERNEL_V_3_16
-    default "3.15.9" if KERNEL_V_3_15
-    default "3.14.16" if KERNEL_V_3_14
-    default "3.12.26" if KERNEL_V_3_12
-    default "3.10.52" if KERNEL_V_3_10
-    default "3.4.102" if KERNEL_V_3_4
-    default "3.2.62" if KERNEL_V_3_2
-    default "2.6.32.63" if KERNEL_V_2_6_32
+    default "3.18" if KERNEL_V_3_18
+    default "3.17.6" if KERNEL_V_3_17
+    default "3.14.26" if KERNEL_V_3_14
+    default "3.12.34" if KERNEL_V_3_12
+    default "3.10.62" if KERNEL_V_3_10
+    default "3.4.105" if KERNEL_V_3_4
+    default "3.2.64" if KERNEL_V_3_2
+    default "2.6.32.64" if KERNEL_V_2_6_32
     default "custom" if KERNEL_LINUX_CUSTOM
 
 endif # ! KERNEL_LINUX_USE_CUSTOM_HEADERS

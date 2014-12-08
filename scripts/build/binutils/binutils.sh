@@ -233,7 +233,7 @@ do_binutils_backend() {
         "${CT_BINUTILS_EXTRA_CONFIG_ARRAY[@]}"
 
     if [ "${static_build}" = "y" ]; then
-        extra_make_flags+=("LDFLAGS=-static -all-static")
+        extra_make_flags+=("LDFLAGS=-all-static")
         CT_DoLog EXTRA "Prepare binutils for static build"
         CT_DoExecLog ALL make ${JOBSFLAGS} configure-host
     fi
@@ -304,6 +304,7 @@ do_elf2flt_backend() {
     CT_DoExecLog CFG                                            \
     CFLAGS="${cflags}"                                          \
     LDFLAGS="${ldflags}"                                        \
+    LIBS="-ldl"                                                 \
     "${CT_SRC_DIR}/elf2flt-${CT_ELF2FLT_VERSION}/configure"     \
         --build=${CT_BUILD}                                     \
         --host=${host}                                          \
