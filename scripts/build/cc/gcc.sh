@@ -4,9 +4,9 @@
 
 # Download gcc
 do_cc_get() {
-    local linaro_milestone
-    local linaro_version
-    local linaro_series
+    local linaro_milestone=""
+    local linaro_version=""
+    local linaro_series=""
     local linaro_base_url="http://launchpad.net/gcc-linaro"
 
     if [ "${CT_CC_CUSTOM}" = "y" ]; then
@@ -24,18 +24,23 @@ do_cc_get() {
                           |sed -r -e 's/-.*//;'         \
                         )"
 
-        # Ah! gcc folks are kind of 'different': they store the tarballs in
-        # subdirectories of the same name!
-        # Arrgghh! Some of those versions does not follow this convention:
-        # gcc-3.3.3 lives in releases/gcc-3.3.3, while gcc-2.95.* isn't in a
-        # subdirectory!
-        CT_GetFile "gcc-${CT_CC_VERSION}"                                                       \
-                   http://mirrors.tuna.tsinghua.edu.cn/gnu/gcc/gcc-${CT_CC_VERSION}             \
-                   {ftp,http}://ftp.gnu.org/gnu/gcc{,{,/releases}/gcc-${CT_CC_VERSION}}         \
-                   ftp://ftp.irisa.fr/pub/mirrors/gcc.gnu.org/gcc/releases/gcc-${CT_CC_VERSION} \
-                   ftp://ftp.uvsq.fr/pub/gcc/snapshots/${CT_CC_VERSION}                         \
+        # The official gcc hosts put gcc under a gcc/release/ directory,
+        # whereas the mirrors put it in the gcc/ directory.
+        # Also, Split out linaro mirrors, so that downloads happen faster.
+        CT_DoLog EXTRA "linaro_version: ${linaro_version} CT_CC_VERSION: ${CT_CC_VERSION}"
+        if [ x"${linaro_version}" = x"${CT_CC_VERSION}" ]; then
+            CT_GetFile "gcc-${CT_CC_VERSION}"                                                \
+                http://mirrors.tuna.tsinghua.edu.cn/gnu/gcc/gcc-${CT_CC_VERSION}             \
+                {ftp,http}://ftp.gnu.org/gnu/gcc{,{,/releases}/gcc-${CT_CC_VERSION}}         \
+                ftp://ftp.irisa.fr/pub/mirrors/gcc.gnu.org/gcc/releases/gcc-${CT_CC_VERSION} \
+                ftp://ftp.uvsq.fr/pub/gcc/snapshots/${CT_CC_VERSION}                         \
+                ftp://{gcc.gnu.org,sourceware.org}/pub/gcc/releases/gcc-${CT_CC_VERSION}     \
+                {http,ftp,https}://ftp.gnu.org/gnu/gcc/gcc-${CT_CC_VERSION}
+        else
+            CT_GetFile "gcc-${CT_CC_VERSION}"                                                \
                    "http://releases.linaro.org/${linaro_milestone}/components/toolchain/gcc-linaro/${linaro_series}" \
                    "${linaro_base_url}/${linaro_series}/${linaro_version}/+download"
+        fi
 
     fi # ! custom location
     # Starting with GCC 4.3, ecj is used for Java, and will only be

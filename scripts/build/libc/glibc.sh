@@ -15,7 +15,8 @@ do_libc_get() {
     local date
     local version
     local -a addons_list
-    local linaro_milestone
+    local linaro_milestone=""
+    local linaro_version=""
 
     addons_list=($(do_libc_add_ons_list " "))
 
@@ -24,12 +25,18 @@ do_libc_get() {
                        |sed -r -e 's/^linaro-.*-20//;' -e 's/-.*//;' \
                      )"
 
+    linaro_version="$( echo "${CT_LIBC_VERSION}"    \
+                       |sed -r -e 's/^linaro-//;'   \
+                     )"
     # Main source
-    CT_GetFile "glibc-${CT_LIBC_VERSION}"               \
-               {ftp,http}://ftp.gnu.org/gnu/glibc       \
-               ftp://gcc.gnu.org/pub/glibc/releases     \
-               ftp://gcc.gnu.org/pub/glibc/snapshots    \
-               http://releases.linaro.org/${linaro_milestone}/components/toolchain/glibc-linaro
+    CT_DoLog EXTRA "linaro_version: ${linaro_version} CT_LIBC_VERSION: ${CT_LIBC_VERSION}"
+    if [ x"${linaro_version}" = x"${CT_LIBC_VERSION}" ]; then
+        CT_GetFile "glibc-${CT_LIBC_VERSION}"                                        \
+            {http,ftp,https}://ftp.gnu.org/gnu/glibc                          \
+            ftp://{sourceware.org,gcc.gnu.org}/pub/glibc/{releases,snapshots} \
+    else
+        CT_GetFile "glibc-${CT_LIBC_VERSION}"                                        \
+            http://releases.linaro.org/${linaro_milestone}/components/toolchain/glibc-linaro
 
     # C library addons
     for addon in "${addons_list[@]}"; do
@@ -44,10 +51,9 @@ do_libc_get() {
             ports:*)    continue;;
         esac
 
-        if ! CT_GetFile "glibc-${addon}-${CT_LIBC_VERSION}"     \
-                        {ftp,http}://ftp.gnu.org/gnu/glibc      \
-                        ftp://gcc.gnu.org/pub/glibc/releases    \
-                        ftp://gcc.gnu.org/pub/glibc/snapshots
+        if ! CT_GetFile "glibc-${addon}-${CT_LIBC_VERSION}"                      \
+               {http,ftp,https}://ftp.gnu.org/gnu/glibc                          \
+               ftp://{sourceware.org,gcc.gnu.org}/pub/glibc/{releases,snapshots}
         then
             # Some add-ons are bundled with glibc, others are
             # bundled in their own tarball. Eg. NPTL is internal,

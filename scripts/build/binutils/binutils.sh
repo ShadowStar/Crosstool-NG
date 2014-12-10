@@ -4,7 +4,8 @@
 
 # Download binutils
 do_binutils_get() {
-    local linaro_milestone
+    local linaro_milestone=""
+    local linaro_version=""
     local linaro_base_url="http://releases.linaro.org"
     if [ "${CT_BINUTILS_CUSTOM}" = "y" ]; then
         CT_GetCustom "binutils" "${CT_BINUTILS_VERSION}" \
@@ -15,11 +16,18 @@ do_binutils_get() {
                            |sed -r -e 's/^linaro-.*-20//;' -e 's/-.*//;' \
                          )"
 
-        CT_GetFile "binutils-${CT_BINUTILS_VERSION}"                                        \
-                   http://mirrors.tuna.tsinghua.edu.cn/gnu/binutils                         \
-                   {ftp,http}://{ftp.gnu.org/gnu,ftp.kernel.org/pub/linux/devel}/binutils   \
-                   ftp://gcc.gnu.org/pub/binutils/{releases,snapshots}                      \
-                   "${linaro_base_url}/${linaro_milestone}/components/toolchain/binutils-linaro"
+        linaro_version="$( echo "${CT_BINUTILS_VERSION}"      \
+                           |sed -r -e 's/^linaro-//;'   \
+                         )"
+        CT_DoLog EXTRA "linaro_version: ${linaro_version} CT_BINUTILS_VERSION: ${CT_BINUTILS_VERSION}"
+        if [ x"${linaro_version}" = x"${CT_BINUTILS_VERSION}" ]; then
+            CT_GetFile "binutils-${CT_BINUTILS_VERSION}"                                \
+                http://mirrors.tuna.tsinghua.edu.cn/gnu/binutils                        \
+                ftp://{sourceware.org,gcc.gnu.org}/pub/binutils/{releases,snapshots}    \
+                {ftp,http}://{ftp.gnu.org/gnu,ftp.kernel.org/pub/linux/devel}/binutils  \
+       else
+            CT_GetFile "binutils-${CT_BINUTILS_VERSION}"                                \
+                "${linaro_base_url}/${linaro_milestone}/components/toolchain/binutils-linaro"
     fi
 
     if [ -n "${CT_ARCH_BINFMT_FLAT}" ]; then

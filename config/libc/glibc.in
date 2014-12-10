@@ -21,10 +21,12 @@ config LIBC_GLIBC_V_linaro_2_20
     bool
     prompt "linaro-2.20-2014.11"
     depends on CC_GCC_SHOW_LINARO
+    select LIBC_GLIBC_2_20_or_later
 
 config LIBC_GLIBC_V_2_20
     bool
     prompt "2.20"
+    select LIBC_GLIBC_2_20_or_later
 
 config LIBC_GLIBC_V_2_19
     bool
@@ -100,6 +102,9 @@ config LIBC_GLIBC_V_2_8
     select LIBC_GLIBC_PORTS_EXTERNAL
 
 endchoice
+
+config LIBC_GLIBC_2_20_or_later
+    bool
 
 config LIBC_VERSION
     string

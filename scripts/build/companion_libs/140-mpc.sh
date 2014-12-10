@@ -14,7 +14,8 @@ if [ "${CT_MPC}" = "y" ]; then
 do_mpc_get() {
     CT_GetFile "mpc-${CT_MPC_VERSION}" .tar.gz      \
         http://mirrors.tuna.tsinghua.edu.cn/gnu/mpc \
-        http://www.multiprecision.org/mpc/download
+        http://www.multiprecision.org/mpc/download  \
+        {http,ftp,https}://ftp.gnu.org/gnu/mpc
 }
 
 # Extract MPC
