@@ -57,7 +57,7 @@ do_debug_gdb_get() {
         if [ "${CT_GDB_CUSTOM}" = "y" ]; then
             CT_GetCustom "gdb" "${CT_GDB_VERSION}" "${CT_GDB_CUSTOM_LOCATION}"
         else
-            if [ x"${linaro_release}" = x"${CT_GDB_VERSION}" ]; then
+            if [ x"${linaro_version}" = x"${CT_GDB_VERSION}" ]; then
                 CT_GetFile "gdb-${CT_GDB_VERSION}"                      \
                     ftp://sources.redhat.com/pub/gdb/{,old-}releases    \
                     ftp://{sourceware.org,gcc.gnu.org}/pub/gdb/releases \
