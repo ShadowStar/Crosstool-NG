@@ -12,7 +12,7 @@ if [ "${CT_ISL}" = "y" ]; then
 
 # Download ISL
 do_isl_get() {
-    CT_GetFile "isl-${CT_ISL_VERSION}"  \
+    CT_GetFile "isl-${CT_ISL_VERSION}" \
         http://mirrors.tuna.tsinghua.edu.cn/gentoo/distfiles \
         ftp://ftp.linux.student.kuleuven.be/pub/people/skimo/isl/ \
         http://mirrors.kernel.org/sources.redhat.com/gcc/infrastructure \

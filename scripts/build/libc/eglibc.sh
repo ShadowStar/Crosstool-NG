@@ -16,16 +16,13 @@ do_libc_get() {
     local -a extra_addons
     local svn_base
 
-    if [[ "${CT_LIBC_VERSION}" == linaro-* ]]; then
-        local linaro_milestone
-        # Account for the Linaro versioning
-        linaro_milestone="$( echo "${CT_LIBC_VERSION}"      \
-                           |sed -r -e 's/^linaro-.*-20//;' -e 's/-.*//;' \
-                         )"
-
+    if echo ${CT_LIBC_VERSION} |grep -q linaro; then
+        # Linaro eglibc releases come from regular downloads...
+        YYMM=`echo ${CT_LIBC_VERSION} |cut -d- -f3 |${sed} -e 's,^..,,'`
         CT_GetFile "eglibc-${CT_LIBC_VERSION}" \
-                   "http://releases.linaro.org/${linaro_milestone}/components/toolchain/eglibc-linaro"
-        return 0
+                   https://releases.linaro.org/${YYMM}/components/toolchain/eglibc-linaro \
+                   http://cbuild.validation.linaro.org/snapshots
+        return
     fi
 
     if [ "${CT_EGLIBC_HTTP}" = "y" ]; then

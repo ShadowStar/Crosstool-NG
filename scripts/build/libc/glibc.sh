@@ -15,31 +15,25 @@ do_libc_get() {
     local date
     local version
     local -a addons_list
-    local linaro_milestone=""
-    local linaro_version=""
 
     addons_list=($(do_libc_add_ons_list " "))
 
-    # Account for the Linaro versioning
-    linaro_milestone="$( echo "${CT_LIBC_VERSION}"      \
-                       |sed -r -e 's/^linaro-.*-20//;' -e 's/-.*//;' \
-                     )"
-
-    linaro_version="$( echo "${CT_LIBC_VERSION}"    \
-                       |sed -r -e 's/^linaro-//;'   \
-                     )"
     # Main source
     if [ "${CT_LIBC_CUSTOM}" = "y" ]; then
         CT_GetCustom "glibc" "${CT_LIBC_VERSION}" "${CT_LIBC_GLIBC_CUSTOM_LOCATION}"
         CT_LIBC_CUSTOM_LOCATION="${CT_SRC_DIR}/glibc-${CT_LIBC_VERSION}"
-    elif [ x"${linaro_version}" = x"${CT_LIBC_VERSION}" ]; then
-        CT_GetFile "glibc-${CT_LIBC_VERSION}"                                        \
-            {http,ftp,https}://ftp.gnu.org/gnu/glibc                          \
-            ftp://{sourceware.org,gcc.gnu.org}/pub/glibc/{releases,snapshots} \
     else
-        CT_DoLog EXTRA "linaro_version: ${linaro_version} CT_LIBC_VERSION: ${CT_LIBC_VERSION}"
-        CT_GetFile "glibc-${CT_LIBC_VERSION}"                                        \
-            http://releases.linaro.org/${linaro_milestone}/components/toolchain/glibc-linaro
+        if echo ${CT_LIBC_VERSION} |grep -q linaro; then
+            # Linaro eglibc releases come from regular downloads...
+            YYMM=`echo ${CT_LIBC_VERSION} |cut -d- -f3 |${sed} -e 's,^..,,'`
+            CT_GetFile "glibc-${CT_LIBC_VERSION}" \
+                       https://releases.linaro.org/${YYMM}/components/toolchain/glibc-linaro \
+                       http://cbuild.validation.linaro.org/snapshots
+        else
+            CT_GetFile "glibc-${CT_LIBC_VERSION}"                                        \
+                       {http,ftp,https}://ftp.gnu.org/gnu/glibc                          \
+                       ftp://{sourceware.org,gcc.gnu.org}/pub/glibc/{releases,snapshots}
+        fi
     fi
 
     # C library addons

@@ -4,42 +4,37 @@
 
 # Download gcc
 do_cc_get() {
-    local linaro_milestone=""
     local linaro_version=""
     local linaro_series=""
-    local linaro_base_url="http://launchpad.net/gcc-linaro"
 
     if [ "${CT_CC_CUSTOM}" = "y" ]; then
         CT_GetCustom "gcc" "${CT_CC_VERSION}" "${CT_CC_CUSTOM_LOCATION}"
     else
         # Account for the Linaro versioning
-        linaro_milestone="$( echo "${CT_CC_VERSION}"      \
-                           |sed -r -e 's/^linaro-.*-20//;' -e 's/-.*//;'  \
-                         )"
-
         linaro_version="$( echo "${CT_CC_VERSION}"      \
-                           |sed -r -e 's/^linaro-//;'   \
+                           |${sed} -r -e 's/^linaro-//;'   \
                          )"
         linaro_series="$( echo "${linaro_version}"      \
-                          |sed -r -e 's/-.*//;'         \
+                          |${sed} -r -e 's/-.*//;'         \
                         )"
 
         # The official gcc hosts put gcc under a gcc/release/ directory,
         # whereas the mirrors put it in the gcc/ directory.
         # Also, Split out linaro mirrors, so that downloads happen faster.
-        CT_DoLog EXTRA "linaro_version: ${linaro_version} CT_CC_VERSION: ${CT_CC_VERSION}"
         if [ x"${linaro_version}" = x"${CT_CC_VERSION}" ]; then
-            CT_GetFile "gcc-${CT_CC_VERSION}"                                                \
-                http://mirrors.tuna.tsinghua.edu.cn/gnu/gcc/gcc-${CT_CC_VERSION}             \
-                {ftp,http}://ftp.gnu.org/gnu/gcc{,{,/releases}/gcc-${CT_CC_VERSION}}         \
-                ftp://ftp.irisa.fr/pub/mirrors/gcc.gnu.org/gcc/releases/gcc-${CT_CC_VERSION} \
-                ftp://ftp.uvsq.fr/pub/gcc/snapshots/${CT_CC_VERSION}                         \
-                ftp://{gcc.gnu.org,sourceware.org}/pub/gcc/releases/gcc-${CT_CC_VERSION}     \
-                {http,ftp,https}://ftp.gnu.org/gnu/gcc/gcc-${CT_CC_VERSION}
+            CT_GetFile "gcc-${CT_CC_VERSION}"                                                       \
+                       http://mirrors.tuna.tsinghua.edu.cn/gnu/gcc/gcc-${CT_CC_VERSION}             \
+                       ftp://ftp.irisa.fr/pub/mirrors/gcc.gnu.org/gcc/releases/gcc-${CT_CC_VERSION} \
+                       ftp://ftp.uvsq.fr/pub/gcc/snapshots/${CT_CC_VERSION}                         \
+                       ftp://{gcc.gnu.org,sourceware.org}/pub/gcc/releases/gcc-${CT_CC_VERSION}     \
+                       {ftp,http,https}://ftp.gnu.org/gnu/gcc{,{,/releases}/gcc-${CT_CC_VERSION}}
         else
-            CT_GetFile "gcc-${CT_CC_VERSION}"                                                \
-                   "http://releases.linaro.org/${linaro_milestone}/components/toolchain/gcc-linaro/${linaro_series}" \
-                   "${linaro_base_url}/${linaro_series}/${linaro_version}/+download"
+            CT_DoLog EXTRA "linaro_version: ${linaro_version} CT_CC_VERSION: ${CT_CC_VERSION}"
+            YYMM=`echo ${CT_CC_VERSION} |cut -d- -f3 |${sed} -e 's,^..,,'`
+            CT_GetFile "gcc-${CT_CC_VERSION}"                                                               \
+                       "http://launchpad.net/gcc-linaro/${linaro_series}/${linaro_version}/+download"       \
+                       https://releases.linaro.org/${YYMM}/components/toolchain/gcc-linaro/${linaro_series} \
+                       http://cbuild.validation.linaro.org/snapshots
         fi
 
     fi # ! custom location
