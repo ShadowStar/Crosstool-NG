@@ -15,9 +15,9 @@ do_binutils_get() {
                        http://cbuild.validation.linaro.org/snapshots
         else
             CT_GetFile "binutils-${CT_BINUTILS_VERSION}"                                        \
-                       http://mirrors.tuna.tsinghua.edu.cn/gnu/binutils                        \
-                       ftp://{sourceware.org,gcc.gnu.org}/pub/binutils/{releases,snapshots}     \
-                       {ftp,http}://{ftp.gnu.org/gnu,ftp.kernel.org/pub/linux/devel}/binutils
+                       http://mirrors.tuna.tsinghua.edu.cn/gnu/binutils                         \
+                       {http,ftp}://{ftp.gnu.org/gnu,ftp.kernel.org/pub/linux/devel}/binutils   \
+                       ftp://{sourceware.org,gcc.gnu.org}/pub/binutils/{releases,snapshots}
         fi
     fi
 
