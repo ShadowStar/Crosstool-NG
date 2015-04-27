@@ -8,7 +8,12 @@
 %struct-type
 
 %{
-#include <stddef.h>
+# ifndef offsetof
+#  include <stddef.h>
+#  ifndef offsetof
+#   define offsetof(st, m) ((size_t)(&((st *)0)->m))
+#  endif
+# endif
 %}
 
 struct kconf_id;
