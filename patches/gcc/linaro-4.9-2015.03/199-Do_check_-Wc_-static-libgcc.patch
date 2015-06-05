@@ -1,0 +1,25 @@
+--- a/lto-plugin/configure
++++ b/lto-plugin/configure
+@@ -4095,7 +4095,9 @@
+ $as_echo_n "checking for -static-libgcc... " >&6; }
+ cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+ /* end confdefs.h.  */
+-
++#if (__clang__)
++#error -Wc,-static-libgcc not implemented
++#endif
+   int main() {}
+ _ACEOF
+ if ac_fn_c_try_link "$LINENO"; then :
+--- a/lto-plugin/configure.ac
++++ b/lto-plugin/configure.ac
+@@ -8,6 +8,9 @@
+ LDFLAGS="$LDFLAGS -static-libgcc"
+ AC_MSG_CHECKING([for -static-libgcc])
+ AC_LINK_IFELSE([
++#if (__clang__)
++#error -Wc,-static-libgcc not implemented
++#endif
+   int main() {}], [have_static_libgcc=yes], [have_static_libgcc=no])
+ AC_MSG_RESULT($have_static_libgcc); 
+ LDFLAGS="$saved_LDFLAGS"
