@@ -1,17 +1,44 @@
-Index: gcc-4.8.1/gcc/config.gcc
-===================================================================
---- gcc-4.8.1.orig/gcc/config.gcc
-+++ gcc-4.8.1/gcc/config.gcc
-@@ -549,7 +549,7 @@ case ${target} in
+From: ktkachov <ktkachov@138bc75d-0d04-0410-961f-82ee72b054a4>
+Date: Fri, 8 May 2015 08:25:47 +0000 (+0000)
+Subject: [PATCH 2/13] musl libc config
+X-Git-Url: https://gcc.gnu.org/git/?p=gcc.git;a=commitdiff_plain;h=a9173ceabaf29c16f8ef226fbf98af373a4b2ceb
+
+[PATCH 2/13] musl libc config
+
+2015-05-08  Gregor Richards  <gregor.richards@uwaterloo.ca>
+	    Szabolcs Nagy  <szabolcs.nagy@arm.com>
+
+	* config.gcc (LIBC_MUSL): New tm_defines macro.
+	* config/linux.h (OPTION_MUSL): Define.
+	(MUSL_DYNAMIC_LINKER, MUSL_DYNAMIC_LINKER32,)
+	(MUSL_DYNAMIC_LINKER64, MUSL_DYNAMIC_LINKERX32,)
+	(INCLUDE_DEFAULTS_MUSL_GPP, INCLUDE_DEFAULTS_MUSL_LOCAL,)
+	(INCLUDE_DEFAULTS_MUSL_PREFIX, INCLUDE_DEFAULTS_MUSL_CROSS,)
+	(INCLUDE_DEFAULTS_MUSL_TOOL, INCLUDE_DEFAULTS_MUSL_NATIVE): Define.
+	* config/linux.opt (mmusl): New option.
+	* doc/invoke.texi (GNU/Linux Options): Document -mmusl.
+	* configure.ac (gcc_cv_libc_provides_ssp): Add *-*-musl*.
+	(gcc_cv_target_dl_iterate_phdr): Add *-linux-musl*.
+	* configure: Regenerate.
+
+
+git-svn-id: svn+ssh://gcc.gnu.org/svn/gcc/trunk@222904 138bc75d-0d04-0410-961f-82ee72b054a4
+---
+
+diff --git a/gcc/config.gcc b/gcc/config.gcc
+index 938d619..e993e5d 100644
+--- a/gcc/config.gcc
++++ b/gcc/config.gcc
+@@ -575,7 +575,7 @@ case ${target} in
  esac
  
  # Common C libraries.
 -tm_defines="$tm_defines LIBC_GLIBC=1 LIBC_UCLIBC=2 LIBC_BIONIC=3"
 +tm_defines="$tm_defines LIBC_GLIBC=1 LIBC_UCLIBC=2 LIBC_BIONIC=3 LIBC_MUSL=4"
  
- # Common parts for widely ported systems.
- case ${target} in
-@@ -652,6 +652,9 @@ case ${target} in
+ # 32-bit x86 processors supported by --with-arch=.  Each processor
+ # MUST be separated by exactly one space.
+@@ -728,6 +728,9 @@ case ${target} in
      *-*-*uclibc*)
        tm_defines="$tm_defines DEFAULT_LIBC=LIBC_UCLIBC"
        ;;
@@ -21,11 +48,11 @@ Index: gcc-4.8.1/gcc/config.gcc
      *)
        tm_defines="$tm_defines DEFAULT_LIBC=LIBC_GLIBC"
        ;;
-Index: gcc-4.8.1/gcc/config/linux.h
-===================================================================
---- gcc-4.8.1.orig/gcc/config/linux.h
-+++ gcc-4.8.1/gcc/config/linux.h
-@@ -32,10 +32,12 @@ see the files COPYING3 and COPYING.RUNTI
+diff --git a/gcc/config/linux.h b/gcc/config/linux.h
+index 857389a..b551c56 100644
+--- a/gcc/config/linux.h
++++ b/gcc/config/linux.h
+@@ -32,10 +32,12 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
  #define OPTION_GLIBC  (DEFAULT_LIBC == LIBC_GLIBC)
  #define OPTION_UCLIBC (DEFAULT_LIBC == LIBC_UCLIBC)
  #define OPTION_BIONIC (DEFAULT_LIBC == LIBC_BIONIC)
@@ -38,9 +65,15 @@ Index: gcc-4.8.1/gcc/config/linux.h
  #endif
  
  #define GNU_USER_TARGET_OS_CPP_BUILTINS()			\
-@@ -53,18 +55,21 @@ see the files COPYING3 and COPYING.RUNTI
-    uClibc or Bionic is the default C library and whether
-    -muclibc or -mglibc or -mbionic has been passed to change the default.  */
+@@ -50,21 +52,25 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+     } while (0)
+ 
+ /* Determine which dynamic linker to use depending on whether GLIBC or
+-   uClibc or Bionic is the default C library and whether
+-   -muclibc or -mglibc or -mbionic has been passed to change the default.  */
++   uClibc or Bionic or musl is the default C library and whether
++   -muclibc or -mglibc or -mbionic or -mmusl has been passed to change
++   the default.  */
  
 -#define CHOOSE_DYNAMIC_LINKER1(LIBC1, LIBC2, LIBC3, LD1, LD2, LD3)	\
 -  "%{" LIBC2 ":" LD2 ";:%{" LIBC3 ":" LD3 ";:" LD1 "}}"
@@ -68,7 +101,15 @@ Index: gcc-4.8.1/gcc/config/linux.h
  #else
  #error "Unsupported DEFAULT_LIBC"
  #endif /* DEFAULT_LIBC */
-@@ -84,21 +89,21 @@ see the files COPYING3 and COPYING.RUNTI
+@@ -81,24 +87,100 @@ see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+ #define BIONIC_DYNAMIC_LINKER32 "/system/bin/linker"
+ #define BIONIC_DYNAMIC_LINKER64 "/system/bin/linker64"
+ #define BIONIC_DYNAMIC_LINKERX32 "/system/bin/linkerx32"
++/* Should be redefined for each target that supports musl.  */
++#define MUSL_DYNAMIC_LINKER "/dev/null"
++#define MUSL_DYNAMIC_LINKER32 "/dev/null"
++#define MUSL_DYNAMIC_LINKER64 "/dev/null"
++#define MUSL_DYNAMIC_LINKERX32 "/dev/null"
  
  #define GNU_USER_DYNAMIC_LINKER						\
    CHOOSE_DYNAMIC_LINKER (GLIBC_DYNAMIC_LINKER, UCLIBC_DYNAMIC_LINKER,	\
@@ -87,19 +128,10 @@ Index: gcc-4.8.1/gcc/config/linux.h
 -			 BIONIC_DYNAMIC_LINKERX32)
 +			 BIONIC_DYNAMIC_LINKERX32, MUSL_DYNAMIC_LINKERX32)
  
- /* Determine whether the entire c99 runtime
-    is present in the runtime library.  */
- #undef TARGET_C99_FUNCTIONS
--#define TARGET_C99_FUNCTIONS (OPTION_GLIBC)
-+#define TARGET_C99_FUNCTIONS (OPTION_GLIBC || OPTION_MUSL)
- 
- /* Whether we have sincos that follows the GNU extension.  */
- #undef TARGET_HAS_SINCOS
-@@ -107,3 +112,74 @@ see the files COPYING3 and COPYING.RUNTI
  /* Whether we have Bionic libc runtime */
  #undef TARGET_HAS_BIONIC
  #define TARGET_HAS_BIONIC (OPTION_BIONIC)
-+
+ 
 +/* musl avoids problematic includes by rearranging the include directories.
 + * Unfortunately, this is mostly duplicated from cppdefault.c */
 +#if DEFAULT_LIBC == LIBC_MUSL
@@ -170,33 +202,40 @@ Index: gcc-4.8.1/gcc/config/linux.h
 +    { 0, 0, 0, 0, 0, 0 }				\
 +  }
 +#endif
-Index: gcc-4.8.1/gcc/config/linux.opt
-===================================================================
---- gcc-4.8.1.orig/gcc/config/linux.opt
-+++ gcc-4.8.1/gcc/config/linux.opt
-@@ -30,3 +30,7 @@ Use GNU C library
++
+ #if (DEFAULT_LIBC == LIBC_UCLIBC) && defined (SINGLE_LIBC) /* uClinux */
+ /* This is a *uclinux* target.  We don't define below macros to normal linux
+    versions, because doing so would require *uclinux* targets to include
+diff --git a/gcc/config/linux.opt b/gcc/config/linux.opt
+index c054338..ef055a7 100644
+--- a/gcc/config/linux.opt
++++ b/gcc/config/linux.opt
+@@ -28,5 +28,9 @@ Target Report RejectNegative Var(linux_libc,LIBC_GLIBC) Negative(muclibc)
+ Use GNU C library
+ 
  muclibc
- Target Report RejectNegative Var(linux_libc,LIBC_UCLIBC) Negative(mbionic)
+-Target Report RejectNegative Var(linux_libc,LIBC_UCLIBC) Negative(mbionic)
++Target Report RejectNegative Var(linux_libc,LIBC_UCLIBC) Negative(mmusl)
  Use uClibc C library
 +
 +mmusl
-+Target Report RejectNegative Var(linux_libc,LIBC_MUSL) Negative(mglibc)
++Target Report RejectNegative Var(linux_libc,LIBC_MUSL) Negative(mbionic)
 +Use musl C library
-Index: gcc-4.8.1/gcc/configure
-===================================================================
---- gcc-4.8.1.orig/gcc/configure
-+++ gcc-4.8.1/gcc/configure
-@@ -26736,6 +26736,9 @@ if test "${gcc_cv_libc_provides_ssp+set}
+diff --git a/gcc/configure b/gcc/configure
+index e563e94..b99eb6d 100755
+--- a/gcc/configure
++++ b/gcc/configure
+@@ -27740,6 +27740,9 @@ if test "${gcc_cv_libc_provides_ssp+set}" = set; then :
  else
    gcc_cv_libc_provides_ssp=no
      case "$target" in
 +       *-*-musl*)
-+         # All versions of musl provide stack protector
++	 # All versions of musl provide stack protector
 +	 gcc_cv_libc_provides_ssp=yes;;
         *-*-linux* | *-*-kfreebsd*-gnu | *-*-knetbsd*-gnu)
        # glibc 2.4 and later provides __stack_chk_fail and
        # either __stack_chk_guard, or TLS access to stack guard canary.
-@@ -26769,6 +26772,7 @@ else
+@@ -27772,6 +27775,7 @@ fi
  	 # <http://gcc.gnu.org/ml/gcc/2008-10/msg00130.html>) and for now
  	 # simply assert that glibc does provide this, which is true for all
  	 # realistically usable GNU/Hurd configurations.
@@ -204,7 +243,7 @@ Index: gcc-4.8.1/gcc/configure
  	 gcc_cv_libc_provides_ssp=yes;;
         *-*-darwin* | *-*-freebsd*)
  	 ac_fn_c_check_func "$LINENO" "__stack_chk_fail" "ac_cv_func___stack_chk_fail"
-@@ -26851,6 +26855,9 @@ case "$target" in
+@@ -27868,6 +27872,9 @@ case "$target" in
        gcc_cv_target_dl_iterate_phdr=no
      fi
      ;;
@@ -214,21 +253,21 @@ Index: gcc-4.8.1/gcc/configure
  esac
  
  if test x$gcc_cv_target_dl_iterate_phdr = xyes; then
-Index: gcc-4.8.1/gcc/configure.ac
-===================================================================
---- gcc-4.8.1.orig/gcc/configure.ac
-+++ gcc-4.8.1/gcc/configure.ac
-@@ -4719,6 +4719,9 @@ AC_CACHE_CHECK(__stack_chk_fail in targe
+diff --git a/gcc/configure.ac b/gcc/configure.ac
+index 55fe633..810725c 100644
+--- a/gcc/configure.ac
++++ b/gcc/configure.ac
+@@ -5247,6 +5247,9 @@ AC_CACHE_CHECK(__stack_chk_fail in target C library,
        gcc_cv_libc_provides_ssp,
        [gcc_cv_libc_provides_ssp=no
      case "$target" in
 +       *-*-musl*)
-+         # All versions of musl provide stack protector
++	 # All versions of musl provide stack protector
 +	 gcc_cv_libc_provides_ssp=yes;;
         *-*-linux* | *-*-kfreebsd*-gnu | *-*-knetbsd*-gnu)
-       [# glibc 2.4 and later provides __stack_chk_fail and
+       # glibc 2.4 and later provides __stack_chk_fail and
        # either __stack_chk_guard, or TLS access to stack guard canary.
-@@ -4752,6 +4755,7 @@ AC_CACHE_CHECK(__stack_chk_fail in targe
+@@ -5273,6 +5276,7 @@ AC_CACHE_CHECK(__stack_chk_fail in target C library,
  	 # <http://gcc.gnu.org/ml/gcc/2008-10/msg00130.html>) and for now
  	 # simply assert that glibc does provide this, which is true for all
  	 # realistically usable GNU/Hurd configurations.
@@ -236,7 +275,7 @@ Index: gcc-4.8.1/gcc/configure.ac
  	 gcc_cv_libc_provides_ssp=yes;;
         *-*-darwin* | *-*-freebsd*)
  	 AC_CHECK_FUNC(__stack_chk_fail,[gcc_cv_libc_provides_ssp=yes],
-@@ -4817,6 +4821,9 @@ case "$target" in
+@@ -5346,6 +5350,9 @@ case "$target" in
        gcc_cv_target_dl_iterate_phdr=no
      fi
      ;;
@@ -246,31 +285,37 @@ Index: gcc-4.8.1/gcc/configure.ac
  esac
  GCC_TARGET_TEMPLATE([TARGET_DL_ITERATE_PHDR])
  if test x$gcc_cv_target_dl_iterate_phdr = xyes; then
-Index: gcc-4.8.1/gcc/ginclude/stddef.h
-===================================================================
---- gcc-4.8.1.orig/gcc/ginclude/stddef.h
-+++ gcc-4.8.1/gcc/ginclude/stddef.h
-@@ -181,6 +181,7 @@ typedef __PTRDIFF_TYPE__ ptrdiff_t;
- #ifndef _GCC_SIZE_T
- #ifndef _SIZET_
- #ifndef __size_t
-+#ifndef __DEFINED_size_t /* musl */
- #define __size_t__	/* BeOS */
- #define __SIZE_T__	/* Cray Unicos/Mk */
- #define _SIZE_T
-@@ -197,6 +198,7 @@ typedef __PTRDIFF_TYPE__ ptrdiff_t;
- #define ___int_size_t_h
- #define _GCC_SIZE_T
- #define _SIZET_
-+#define __DEFINED_size_t /* musl */
- #if (defined (__FreeBSD__) && (__FreeBSD__ >= 5)) \
-   || defined(__FreeBSD_kernel__)
- /* __size_t is a typedef on FreeBSD 5, must not trash it. */
-@@ -214,6 +216,7 @@ typedef __SIZE_TYPE__ size_t;
- typedef long ssize_t;
- #endif /* __BEOS__ */
- #endif /* !(defined (__GNUG__) && defined (size_t)) */
-+#endif /* __DEFINED_size_t */
- #endif /* __size_t */
- #endif /* _SIZET_ */
- #endif /* _GCC_SIZE_T */
+diff --git a/gcc/doc/invoke.texi b/gcc/doc/invoke.texi
+index cb5ae17..9169731 100644
+--- a/gcc/doc/invoke.texi
++++ b/gcc/doc/invoke.texi
+@@ -669,7 +669,7 @@ Objective-C and Objective-C++ Dialects}.
+ -mcpu=@var{cpu}}
+ 
+ @emph{GNU/Linux Options}
+-@gccoptlist{-mglibc -muclibc -mbionic -mandroid @gol
++@gccoptlist{-mglibc -muclibc -mmusl -mbionic -mandroid @gol
+ -tno-android-cc -tno-android-ld}
+ 
+ @emph{H8/300 Options}
+@@ -15384,13 +15384,19 @@ These @samp{-m} options are defined for GNU/Linux targets:
+ @item -mglibc
+ @opindex mglibc
+ Use the GNU C library.  This is the default except
+-on @samp{*-*-linux-*uclibc*} and @samp{*-*-linux-*android*} targets.
++on @samp{*-*-linux-*uclibc*}, @samp{*-*-linux-*musl*} and
++@samp{*-*-linux-*android*} targets.
+ 
+ @item -muclibc
+ @opindex muclibc
+ Use uClibc C library.  This is the default on
+ @samp{*-*-linux-*uclibc*} targets.
+ 
++@item -mmusl
++@opindex mmusl
++Use the musl C library.  This is the default on
++@samp{*-*-linux-*musl*} targets.
++
+ @item -mbionic
+ @opindex mbionic
+ Use Bionic C library.  This is the default on
