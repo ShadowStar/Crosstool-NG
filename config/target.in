@@ -196,6 +196,7 @@ config ARCH_ARCH
     string
     prompt "Architecture level"
     depends on ARCH_SUPPORTS_WITH_ARCH
+    depends on ARCH_CPU = ""
     default ""
     help
       GCC uses this name to determine what kind of instructions it can emit
@@ -252,6 +253,7 @@ config ARCH_TUNE
     string
     prompt "Tune for CPU"
     depends on ARCH_SUPPORTS_WITH_TUNE
+    depends on ARCH_CPU = ""
     default ""
     help
       This option is very similar to the ARCH_CPU option (above), except
