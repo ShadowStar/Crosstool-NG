@@ -38,7 +38,7 @@ choice
 
 config LIBC_NEWLIB_LINARO_V_2_2_0
     bool
-    prompt "Linaro 2.2.0-2015.01"
+    prompt "linaro-2.2.0-2015.01"
     depends on CC_NEWLIB_SHOW_LINARO
 
 config LIBC_NEWLIB_V_2_2_0
@@ -47,12 +47,17 @@ config LIBC_NEWLIB_V_2_2_0
 
 config LIBC_NEWLIB_LINARO_V_2_1_0
     bool
-    prompt "Linaro 2.1.0-2014.09"
+    prompt "linaro-2.1.0-2014.09"
     depends on CC_NEWLIB_SHOW_LINARO
 
 config LIBC_NEWLIB_V_2_1_0
     bool
     prompt "2.1.0"
+
+config LIBC_NEWLIB_LINARO_V_2_0_0
+    bool
+    prompt "linaro-2.0.0-2013.11"
+    depends on CC_NEWLIB_SHOW_LINARO
 
 config LIBC_NEWLIB_V_2_0_0
     bool
@@ -101,6 +106,7 @@ config LIBC_VERSION
     default "2.2.0" if LIBC_NEWLIB_V_2_2_0
     default "linaro-2.1.0-2014.09" if LIBC_NEWLIB_LINARO_V_2_1_0
     default "2.1.0" if LIBC_NEWLIB_V_2_1_0
+    default "linaro-2.0.0-2013.11" if LIBC_NEWLIB_LINARO_V_2_0_0
     default "2.0.0" if LIBC_NEWLIB_V_2_0_0
     default "1.20.0" if LIBC_NEWLIB_V_1_20_0
     default "1.19.0" if LIBC_NEWLIB_V_1_19_0
