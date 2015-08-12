@@ -47,6 +47,12 @@ config BINUTILS_V_2_24
     prompt "2.24"
     select BINUTILS_2_24_or_later
 
+config BINUTILS_LINARO_V_2_23
+    bool
+    prompt "linaro-2.23.2-2013.10-4"
+    select BINUTILS_2_23_or_later
+    depends on CC_BINUTILS_SHOW_LINARO
+
 config BINUTILS_V_2_23_2
     bool
     prompt "2.23.2"
@@ -115,6 +121,7 @@ config BINUTILS_VERSION
     default "2.25" if BINUTILS_V_2_25
     default "linaro-2.24.0-2014.11-2" if BINUTILS_LINARO_V_2_24
     default "2.24" if BINUTILS_V_2_24
+    default "linaro-2.23.2-2013.10-4" if BINUTILS_LINARO_V_2_23
     default "2.23.2" if BINUTILS_V_2_23_2
     default "2.23.1" if BINUTILS_V_2_23_1
     default "2.22" if BINUTILS_V_2_22
