@@ -198,6 +198,7 @@ do_gcc_core_backend() {
     local -a core_LDFLAGS
     local -a core_targets
     local -a extra_user_config
+    local -a extra_user_env
     local arg
 
     for arg in "$@"; do
@@ -370,6 +371,21 @@ do_gcc_core_backend() {
     extra_config+=(--disable-libgomp)
     extra_config+=(--disable-libmudflap)
 
+    if [ "${CT_CC_GCC_LIBSSP}" = "y" ]; then
+        extra_config+=(--enable-libssp)
+    else
+        extra_config+=(--disable-libssp)
+    fi
+    if [ "${CT_CC_GCC_HAS_LIBQUADMATH}" = "y" ]; then
+        if [ "${CT_CC_GCC_LIBQUADMATH}" = "y" ]; then
+            extra_config+=(--enable-libquadmath)
+            extra_config+=(--enable-libquadmath-support)
+        else
+            extra_config+=(--disable-libquadmath)
+            extra_config+=(--disable-libquadmath-support)
+        fi
+    fi
+
     [ "${CT_TOOLCHAIN_ENABLE_NLS}" != "y" ] && extra_config+=("--disable-nls")
 
     [ "${CT_CC_GCC_DISABLE_PCH}" = "y" ] && extra_config+=("--disable-libstdcxx-pch")
@@ -382,6 +398,10 @@ do_gcc_core_backend() {
     # Since that's the default, only pass --disable-multilib.
     if [ "${CT_MULTILIB}" != "y" ]; then
         extra_config+=("--disable-multilib")
+    fi
+
+    if [ "x${CT_CC_GCC_EXTRA_ENV_ARRAY}" != "x" ]; then
+        extra_user_env=( "${CT_CC_GCC_EXTRA_ENV_ARRAY[@]}" )
     fi
 
     CT_DoLog DEBUG "Extra config passed: '${extra_config[*]}'"
@@ -463,7 +483,7 @@ do_gcc_core_backend() {
             repair_cc=""
         fi
 
-        CT_DoExecLog ALL make ${JOBSFLAGS} -C gcc ${libgcc_rule} \
+        CT_DoExecLog ALL make ${JOBSFLAGS} ${extra_user_env} -C gcc ${libgcc_rule} \
                               ${repair_cc}
         sed -r -i -e 's@-lc@@g' gcc/${libgcc_rule}
     else # build_libgcc
@@ -482,7 +502,7 @@ do_gcc_core_backend() {
     fi
 
     CT_DoLog EXTRA "Building gcc"
-    CT_DoExecLog ALL make ${JOBSFLAGS} "${core_targets[@]/#/all-}"
+    CT_DoExecLog ALL make ${JOBSFLAGS} ${extra_user_env} "${core_targets[@]/#/all-}"
 
     CT_DoLog EXTRA "Installing gcc"
     CT_DoExecLog ALL make ${JOBSFLAGS} "${core_targets[@]/#/install-}"
@@ -764,8 +784,10 @@ do_gcc_backend() {
     fi
     if [ "${CT_CC_GCC_USE_LTO}" = "y" ]; then
         extra_config+=("--with-libelf=${complibs}")
+        extra_config+=("--enable-lto")
     elif [ "${CT_CC_GCC_HAS_LTO}" = "y" ]; then
         extra_config+=("--with-libelf=no")
+        extra_config+=("--disable-lto")
     fi
 
     if [ ${#host_libstdcxx_flags[@]} -ne 0 ]; then
