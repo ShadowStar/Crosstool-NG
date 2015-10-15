@@ -139,13 +139,15 @@ config GDB_V_6_8
     bool
     prompt "6.8a"
 
+endchoice
+
 config GDB_CUSTOM
     bool
     prompt "Custom gdb"
     depends on EXPERIMENTAL
-    select GDB_7_2_or_later
-
-endchoice
+    help
+    The choosen gdb version shall be not downloaded. Instead use
+    a custom location to get the source.
 
 config GDB_7_2_or_later
     bool
