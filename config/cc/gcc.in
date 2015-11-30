@@ -37,15 +37,10 @@ choice
 # Don't remove next line
 # CT_INSERT_VERSION_BELOW
 
-config CC_GCC_V_5_2_0
+config CC_GCC_V_5_2
     bool
     prompt "5.2.0"
-    select CC_GCC_5_2
-
-config CC_GCC_V_5_1
-    bool
-    prompt "5.1.0"
-    select CC_GCC_5_1
+    select CC_GCC_5
 
 config CC_GCC_V_linaro_4_9
     bool
@@ -122,28 +117,6 @@ config CC_GCC_V_4_2
     bool
     prompt "4.2.4"
     select CC_GCC_4_2
-
-# We need that one, it's the only version with avr32 support
-# because we have a patch for it
-config CC_GCC_V_4_2_2
-    bool
-    prompt "4.2.2"
-    select CC_GCC_4_2
-
-config CC_GCC_V_4_1
-    bool
-    prompt "4.1.2 (OBSOLETE)"
-    depends on OBSOLETE
-
-config CC_GCC_V_4_0
-    bool
-    prompt "4.0.4 (OBSOLETE)"
-    depends on OBSOLETE
-
-config CC_GCC_V_3_4
-    bool
-    prompt "3.4.6 (OBSOLETE)"
-    depends on OBSOLETE
 
 endchoice
 
@@ -276,9 +249,9 @@ config CC_GCC_4_9_or_later
     bool
     select CC_GCC_4_8_or_later
 
-config CC_GCC_5_2
+config CC_GCC_5
     bool
-    select CC_GCC_5_2_or_later
+    select CC_GCC_5_or_later
     select CC_GCC_USE_GMP_MPFR
     select CC_GCC_USE_MPC
     select CC_GCC_HAS_GRAPHITE
@@ -290,31 +263,14 @@ config CC_GCC_5_2
     select CC_GCC_HAS_LIBSANITIZER
     select CC_SUPPORT_GOLANG
 
-config CC_GCC_5_2_or_later
-    bool
-    select CC_GCC_5_1_or_later
-
-config CC_GCC_5_1
-    bool
-    select CC_GCC_5_1_or_later
-    select CC_GCC_USE_GMP_MPFR
-    select CC_GCC_USE_MPC
-    select CC_GCC_HAS_GRAPHITE
-    select CC_GCC_HAS_LTO
-    select CC_GCC_HAS_PKGVERSION_BUGURL
-    select CC_GCC_HAS_BUILD_ID
-    select CC_GCC_HAS_LNK_HASH_STYLE
-    select CC_GCC_HAS_LIBQUADMATH
-    select CC_GCC_HAS_LIBSANITIZER
-    select CC_SUPPORT_GOLANG
-
-config CC_GCC_5_1_or_later
+config CC_GCC_5_or_later
     bool
     select CC_GCC_4_9_or_later
 
+
 config CC_GCC_latest
     bool
-    select CC_GCC_5_1_or_later
+    select CC_GCC_5_or_later
     select CC_GCC_USE_GMP_MPFR
     select CC_GCC_USE_MPC
     select CC_GCC_HAS_GRAPHITE
@@ -334,7 +290,7 @@ config CC_GCC_USE_GRAPHITE
     bool
     default y
     depends on CC_GCC_HAS_GRAPHITE
-    select CLOOG_NEEDED if !CC_GCC_5_1_or_later
+    select CLOOG_NEEDED if !CC_GCC_5_or_later
     select PPL_NEEDED if !CC_GCC_4_8_or_later
     select ISL_NEEDED if CC_GCC_4_8_or_later
     help
@@ -412,7 +368,6 @@ config CC_GCC_VERSION
 # Don't remove next line
 # CT_INSERT_VERSION_STRING_BELOW
     default "5.2.0" if CC_GCC_V_5_2
-    default "5.1.0" if CC_GCC_V_5_1
     default "linaro-4.9-2015.06" if CC_GCC_V_linaro_4_9
     default "4.9.3" if CC_GCC_V_4_9
     default "linaro-4.8-2015.06" if CC_GCC_V_linaro_4_8
@@ -422,15 +377,11 @@ config CC_GCC_VERSION
     default "linaro-4.6-2013.05" if CC_GCC_V_linaro_4_6
     default "4.6.4" if CC_GCC_V_4_6
     default "linaro-4.5-2012.03" if CC_GCC_V_linaro_4_5
-    default "4.5.3" if CC_GCC_V_4_5
+    default "4.5.4" if CC_GCC_V_4_5
     default "linaro-4.4-2011.02-0" if CC_GCC_V_linaro_4_4
     default "4.4.7" if CC_GCC_V_4_4
     default "4.3.6" if CC_GCC_V_4_3
     default "4.2.4" if CC_GCC_V_4_2
-    default "4.2.2" if CC_GCC_V_4_2_2
-    default "4.1.2" if CC_GCC_V_4_1
-    default "4.0.4" if CC_GCC_V_4_0
-    default "3.4.6" if CC_GCC_V_3_4
 
 config CC_LANG_JAVA_USE_ECJ
     bool

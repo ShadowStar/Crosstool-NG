@@ -6,6 +6,7 @@ do_isl_get() { :; }
 do_isl_extract() { :; }
 do_isl_for_build() { :; }
 do_isl_for_host() { :; }
+do_isl_for_target() { :; }
 
 # Overide functions depending on configuration
 if [ "${CT_ISL}" = "y" ]; then
@@ -124,15 +125,15 @@ do_isl_backend() {
         --with-clang=no
 
     CT_DoLog EXTRA "Building ISL"
-    CT_DoExecLog ALL make ${JOBSFLAGS}
+    CT_DoExecLog ALL ${make} ${JOBSFLAGS}
 
     if [ "${CT_COMPLIBS_CHECK}" = "y" ]; then
         CT_DoLog EXTRA "Checking ISL"
-        CT_DoExecLog ALL make ${JOBSFLAGS} -s check
+        CT_DoExecLog ALL ${make} ${JOBSFLAGS} -s check
     fi
 
     CT_DoLog EXTRA "Installing ISL"
-    CT_DoExecLog ALL make install
+    CT_DoExecLog ALL ${make} install
 }
 
 fi # CT_ISL

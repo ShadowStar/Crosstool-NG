@@ -75,6 +75,7 @@ export CPPFLAGS        := @CPPFLAGS@
 export CFLAGS          := @CFLAGS@
 export LDFLAGS         := @LDFLAGS@
 export LIBS            := @LIBS@
+export INTL_LIBS       := @INTL_LIBS@
 export curses_hdr      := @ac_ct_curses_hdr@
 export gettext         := @gettext@
 
@@ -381,7 +382,7 @@ install-post:
 #--------------------------------------
 # Uninstall rules
 
-real-uninstall: $(patsubst %,uninstall-%,$(TARGETS))
+real-uninstall: $(patsubst %,uninstall-%,$(filter-out lib-kconfig,$(TARGETS)))
 
 uninstall-bin:
 	@echo "  RM      '$(DESTDIR)$(bindir)/$(PROG_NAME)'"
