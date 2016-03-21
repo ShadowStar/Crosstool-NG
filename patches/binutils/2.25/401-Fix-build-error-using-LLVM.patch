@@ -11,20 +11,6 @@ Subject: [PATCH] Fix a problem building the ARM assembler using LLVM.
  gas/config/tc-arm.c | 5 ++++-
  2 files changed, 10 insertions(+), 1 deletion(-)
 
-diff --git a/gas/ChangeLog b/gas/ChangeLog
-index 027b556..6e7319d 100644
---- a/gas/ChangeLog
-+++ b/gas/ChangeLog
-@@ -1,3 +1,9 @@
-+2016-02-01  Loria  <Loria@phantasia.org>
-+
-+	PR target/19311
-+	* config/tc-arm.c (encode_arm_immediate): Recode to improve
-+	efficiency and avoid an LLVM loop optimization bug.
-+
- 2016-02-01  Nick Clifton  <nickc@redhat.com>
- 
- 	* config/tc-microblaze.c (parse_imm): Fix compile time warning
 diff --git a/gas/config/tc-arm.c b/gas/config/tc-arm.c
 index 4a16267..055e525 100644
 --- a/gas/config/tc-arm.c
