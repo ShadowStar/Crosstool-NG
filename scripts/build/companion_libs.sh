@@ -32,6 +32,11 @@ do_companion_libs_for_build() {
 
 # Build the companion libs facilities for host
 do_companion_libs_for_host() {
+    install -d ${CT_HOST_COMPLIBS_DIR}/include/sys
+    install -m0644 ${CT_LIB_DIR}/scripts/build/companion_libs/include/*.h \
+	    ${CT_HOST_COMPLIBS_DIR}/include/
+    install -m0644 ${CT_LIB_DIR}/scripts/build/companion_libs/include/sys/*.h \
+	    ${CT_HOST_COMPLIBS_DIR}/include/sys/
     for f in ${CT_COMP_LIBS_FACILITY_LIST}; do
         do_${f}_for_host
     done
