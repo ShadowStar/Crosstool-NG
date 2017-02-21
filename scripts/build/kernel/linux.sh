@@ -49,7 +49,7 @@ do_kernel_get() {
             3.*)    rel_dir=v3.x;;
             4.*)    rel_dir=v4.x;;
         esac
-        korg_base="http://www.kernel.org/pub/linux/kernel/${rel_dir}"
+        korg_base="https://www.kernel.org/pub/linux/kernel/${rel_dir}"
         CT_GetFile "linux-${CT_KERNEL_VERSION}"         \
                    "http://mirrors.tuna.tsinghua.edu.cn/kernel/${rel_dir}" \
                    "http://mirrors.aliyun.com/linux-kernel/${rel_dir}" \
@@ -120,6 +120,7 @@ do_kernel_install() {
     CT_DoLog EXTRA "Installing kernel headers"
     CT_DoExecLog ALL                                    \
     ${make} -C "${kernel_path}"                         \
+         HOSTCFLAGS="-I${CT_BUILDTOOLS_PREFIX_DIR}/include" \
          CROSS_COMPILE="${CT_TARGET}-"                  \
          O="${CT_BUILD_DIR}/build-kernel-headers"       \
          ARCH=${kernel_arch}                            \
@@ -131,6 +132,7 @@ do_kernel_install() {
         CT_DoLog EXTRA "Checking installed headers"
         CT_DoExecLog ALL                                    \
         ${make} -C "${kernel_path}"                         \
+             HOSTCFLAGS="-I${CT_BUILDTOOLS_PREFIX_DIR}/include" \
              CROSS_COMPILE="${CT_TARGET}-"                  \
              O="${CT_BUILD_DIR}/build-kernel-headers"       \
              ARCH=${kernel_arch}                            \
