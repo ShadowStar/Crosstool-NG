@@ -37,9 +37,9 @@ choice
 # Don't remove next line
 # CT_INSERT_VERSION_BELOW
 
-config CC_GCC_V_5_2
+config CC_GCC_V_5_4
     bool
-    prompt "5.2.0"
+    prompt "5.4.0"
     select CC_GCC_5
 
 config CC_GCC_V_linaro_5_1
@@ -56,7 +56,7 @@ config CC_GCC_V_linaro_4_9
 
 config CC_GCC_V_4_9
     bool
-    prompt "4.9.3"
+    prompt "4.9.4"
     select CC_GCC_4_9
 
 config CC_GCC_V_linaro_4_8
@@ -373,10 +373,10 @@ config CC_GCC_VERSION
     string
 # Don't remove next line
 # CT_INSERT_VERSION_STRING_BELOW
-    default "5.2.0" if CC_GCC_V_5_2
+    default "5.4.0" if CC_GCC_V_5_4
     default "linaro-5.1-2015.08" if CC_GCC_V_linaro_5_1
     default "linaro-4.9-2016.02" if CC_GCC_V_linaro_4_9
-    default "4.9.3" if CC_GCC_V_4_9
+    default "4.9.4" if CC_GCC_V_4_9
     default "linaro-4.8-2015.06" if CC_GCC_V_linaro_4_8
     default "4.8.5" if CC_GCC_V_4_8
     default "linaro-4.7-2014.06" if CC_GCC_V_linaro_4_7
