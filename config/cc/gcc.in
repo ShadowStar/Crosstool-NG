@@ -42,15 +42,15 @@ config CC_GCC_V_5_4
     prompt "5.4.0"
     select CC_GCC_5
 
-config CC_GCC_V_linaro_5_1
+config CC_GCC_V_linaro_5_4
     bool
-    prompt "linaro-5.1-2015.08"
+    prompt "linaro-5.4-2017.01"
     depends on CC_GCC_SHOW_LINARO
     select CC_GCC_5
 
 config CC_GCC_V_linaro_4_9
     bool
-    prompt "linaro-4.9-2016.02"
+    prompt "linaro-4.9-2017.01"
     depends on CC_GCC_SHOW_LINARO
     select CC_GCC_4_9
 
@@ -374,8 +374,8 @@ config CC_GCC_VERSION
 # Don't remove next line
 # CT_INSERT_VERSION_STRING_BELOW
     default "5.4.0" if CC_GCC_V_5_4
-    default "linaro-5.1-2015.08" if CC_GCC_V_linaro_5_1
-    default "linaro-4.9-2016.02" if CC_GCC_V_linaro_4_9
+    default "linaro-5.4-2017.01" if CC_GCC_V_linaro_5_4
+    default "linaro-4.9-2017.01" if CC_GCC_V_linaro_4_9
     default "4.9.4" if CC_GCC_V_4_9
     default "linaro-4.8-2015.06" if CC_GCC_V_linaro_4_8
     default "4.8.5" if CC_GCC_V_4_8
