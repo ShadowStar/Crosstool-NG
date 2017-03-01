@@ -25,6 +25,21 @@ choice
 # Don't remove next line
 # CT_INSERT_VERSION_BELOW
 
+config BINUTILS_V_2_27
+    bool
+    prompt "2.27"
+    select BINUTILS_2_27_or_later
+
+config BINUTILS_V_2_26_1
+    bool
+    prompt "2.26.1"
+    select BINUTILS_2_26_1_or_later
+
+config BINUTILS_V_2_26
+    bool
+    prompt "2.26"
+    select BINUTILS_2_26_or_later
+
 config BINUTILS_V_2_25_1
     bool
     prompt "2.25.1"
@@ -121,6 +136,9 @@ config BINUTILS_VERSION
     string
 # Don't remove next line
 # CT_INSERT_VERSION_STRING_BELOW
+    default "2.27" if BINUTILS_V_2_27
+    default "2.26.1" if BINUTILS_V_2_26_1
+    default "2.26" if BINUTILS_V_2_26
     default "2.25.1" if BINUTILS_V_2_25_1
     default "linaro-2.25.0-2015.01-2" if BINUTILS_LINARO_V_2_25
     default "2.25" if BINUTILS_V_2_25
@@ -135,6 +153,18 @@ config BINUTILS_VERSION
     default "2.20.1a" if BINUTILS_V_2_20_1a
     default "2.19.1a" if BINUTILS_V_2_19_1a
     default "2.18a" if BINUTILS_V_2_18a
+
+config BINUTILS_2_27_or_later
+    bool
+    select BINUTILS_2_26_1_or_later
+
+config BINUTILS_2_26_1_or_later
+    bool
+    select BINUTILS_2_26_or_later
+
+config BINUTILS_2_26_or_later
+    bool
+    select BINUTILS_2_25_1_or_later
 
 config BINUTILS_2_25_1_or_later
     bool
