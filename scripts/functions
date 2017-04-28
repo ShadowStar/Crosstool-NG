@@ -1,6 +1,58 @@
-# This file contains some usefull common functions -*- sh -*-
+# -*- mode: sh; tab-width: 4 -*-
+# vi: ts=4:sw=4:sts=4:et
+# This file contains some useful common functions
 # Copyright 2007 Yann E. MORIN
 # Licensed under the GPL v2. See COPYING in the root of this package
+
+CT_LoadConfig() {
+    local o
+
+    # Parse the configuration file
+    # It has some info about the logging facility, so include it early
+    # It also sets KERNEL/ARCH/... for file inclusion below. Does not handle
+    # recursive definitions yet. We don't need arrays at this point.
+    CT_TestOrAbort "Configuration file not found. Please create one." -r .config
+    . .config
+
+    # Include sub-scripts instead of calling them: that way, we do not have to
+    # export any variable, nor re-parse the configuration and functions files.
+    . "${CT_LIB_DIR}/scripts/build/internals.sh"
+    . "${CT_LIB_DIR}/scripts/build/arch.sh"
+    . "${CT_LIB_DIR}/scripts/build/companion_tools.sh"
+    . "${CT_LIB_DIR}/scripts/build/kernel/${CT_KERNEL}.sh"
+    . "${CT_LIB_DIR}/scripts/build/companion_libs.sh"
+    . "${CT_LIB_DIR}/scripts/build/binutils/${CT_BINUTILS}.sh"
+    . "${CT_LIB_DIR}/scripts/build/libc/${CT_LIBC}.sh"
+    . "${CT_LIB_DIR}/scripts/build/cc.sh"
+    . "${CT_LIB_DIR}/scripts/build/debug.sh"
+    . "${CT_LIB_DIR}/scripts/build/test_suite.sh"
+
+    # Target tuple: CT_TARGET needs a little love:
+    CT_DoBuildTargetTuple
+
+    # Kludge: If any of the configured options needs CT_TARGET,
+    # then rescan the options file now. This also handles recursive variables;
+    # but we don't want to loop forever if there's a circular reference.
+    oldvals=""
+    try=0
+    while [ "$try" -le 10 ]; do
+        . .config
+        vals=`set | ${grep} -E '^CT_'`
+        if [ "$oldvals" = "$vals" ]; then
+            break
+        fi
+        oldvals="$vals"
+        try=$[ try + 1 ]
+    done
+    if [ "$try" -gt 10 ]; then
+        CT_Abort "Variables in .config recurse too deep."
+    fi
+    # Double eval: first eval substitutes option name, second eval unescapes quotes
+    # and whitespace.
+    for o in `set | ${sed} -rn 's/^(CT_[A-Za-z0-9_]*_ARRAY)=.*/\1/p'`; do
+        eval "eval $o=(\"\$$o\")"
+    done
+}
 
 # Prepare the fault handler
 CT_OnError() {
@@ -46,7 +98,7 @@ CT_OnError() {
             old_trap="$(trap -p ERR)"
             trap -- ERR
             (
-                exec >&6 2>&7 <&8
+                CT_LogDisable # In this subshell
                 printf "\r         \n\nCurrent command"
                 if [ -n "${cur_cmd}" ]; then
                     printf ":\n  %s\n" "${cur_cmd}"
@@ -100,10 +152,17 @@ CT_OnError() {
         CT_STEP_COUNT=1     # To have a zero-indentation
         CT_DoLog ERROR ">>"
         if [ "${CT_LOG_TO_FILE}" = "y" ]; then
-            CT_DoLog ERROR ">>  For more info on this error, look at the file: '${tmp_log_file#${CT_TOP_DIR}/}'"
+            CT_DoLog ERROR ">>  For more info on this error, look at the file: '${CT_BUILD_LOG#${CT_TOP_DIR}/}'"
         fi
         CT_DoLog ERROR ">>  There is a list of known issues, some with workarounds, in:"
         CT_DoLog ERROR ">>      '${CT_DOC_DIR#${CT_TOP_DIR}/}/B - Known issues.txt'"
+        CT_DoLog ERROR ">>"
+        CT_DoLog ERROR ">>  If you feel this is a bug in crosstool-NG, report it at:"
+        CT_DoLog ERROR ">>      https://github.com/crosstool-ng/crosstool-ng/issues/"
+        CT_DoLog ERROR ">>"
+        CT_DoLog ERROR ">>  Make sure your report includes all the information pertinent to this issue."
+        CT_DoLog ERROR ">>  Read the bug reporting guidelines here:"
+        CT_DoLog ERROR ">>      http://crosstool-ng.github.io/support/"
 
         CT_DoLog ERROR ""
         CT_DoEnd ERROR
@@ -130,12 +189,28 @@ set +o hashall
 
 # Log policy:
 #  - first of all, save stdout so we can see the live logs: fd #6
-# (also save stdin and stderr for use by CT_DEBUG_INTERACTIVE)
-exec 6>&1 7>&2 8<&0
-#  - then point stdout to the log file
-tmp_log_file="${CT_TOP_DIR}/build.log"
-rm -f "${tmp_log_file}"
-exec >>"${tmp_log_file}"
+#    (also save stdin and stderr for use by CT_DEBUG_INTERACTIVE)
+#    FIXME: it doesn't look like anyone is overriding stdin/stderr. Do we need
+#    to save/restore them?
+CT_LogEnable() {
+	local clean=no
+	local arg
+
+	for arg in "$@"; do eval "$arg"; done
+	exec 6>&1 7>&2 8<&0
+	CT_BUILD_LOG="${CT_TOP_DIR}/build.log"
+	CT_LOG_ENABLED=y
+        if [ "$clean" = "yes" ]; then
+		rm -f "${CT_BUILD_LOG}"
+	fi
+	exec >>"${CT_BUILD_LOG}"
+}
+
+# Restore original stdout, stderr and stdin
+CT_LogDisable() {
+	exec >&6 2>&7 <&8
+	CT_LOG_ENABLED=
+}
 
 # The different log levels:
 CT_LOG_LEVEL_ERROR=0
@@ -191,18 +266,24 @@ CT_DoLog() {
                 y,*"warning:"*)         cur_L=WARN; cur_l=${CT_LOG_LEVEL_WARN};;
                 y,*"WARNING:"*)         cur_L=WARN; cur_l=${CT_LOG_LEVEL_WARN};;
                 *"error:"*)             cur_L=ERROR; cur_l=${CT_LOG_LEVEL_ERROR};;
-                *"make["*"]: *** ["*)   cur_L=ERROR; cur_l=${CT_LOG_LEVEL_ERROR};;
+                *"make["*"]: ***"*)     cur_L=ERROR; cur_l=${CT_LOG_LEVEL_ERROR};;
                 *)                      cur_L="${LEVEL}"; cur_l="${level}";;
               esac
               # There will always be a log file (stdout, fd #1), be it /dev/null
-              printf "[%-5s]%*s%s%s\n" "${cur_L}" "${indent}" " " "${line}"
-              if [ ${cur_l} -le ${max_level} ]; then
-                  # Only print to console (fd #6) if log level is high enough.
-                  printf "${CT_LOG_PROGRESS_BAR:+\r}[%-5s]%*s%s%s\n" "${cur_L}" "${indent}" " " "${line}" >&6
-              fi
-              if [ "${CT_LOG_PROGRESS_BAR}" = "y" ]; then
-                  printf "\r[%02d:%02d] %s " $((SECONDS/60)) $((SECONDS%60)) "${_prog_bar[$((_prog_bar_cpt/10))]}" >&6
-                  _prog_bar_cpt=$(((_prog_bar_cpt+1)%40))
+              if [ -n "${CT_LOG_ENABLED}" ]; then
+                  printf "[%-5s]%*s%s%s\n" "${cur_L}" "${indent}" " " "${line}"
+                  # If log file has been set up, fd#6 is console and it only
+                  # gets the most important messages.
+                  if [ ${cur_l} -le ${max_level} ]; then
+                      # Only print to console (fd #6) if log level is high enough.
+                      printf "${CT_LOG_PROGRESS_BAR:+\r}[%-5s]%*s%s%s\n" "${cur_L}" "${indent}" " " "${line}" >&6
+                  fi
+                  if [ "${CT_LOG_PROGRESS_BAR}" = "y" ]; then
+                      printf "\r[%02d:%02d] %s " $((SECONDS/60)) $((SECONDS%60)) "${_prog_bar[$((_prog_bar_cpt/10))]}" >&6
+                      _prog_bar_cpt=$(((_prog_bar_cpt+1)%40))
+                  fi
+              elif [ ${cur_l} -le ${CT_LOG_LEVEL_WARN} ]; then
+                  printf "[%-5s]%*s%s%s\n" "${cur_L}" "${indent}" " " "${line}"
               fi
           done
         )
@@ -306,21 +387,57 @@ CT_SanitizePath() {
     PATH="${new}"
 }
 
-# Sanitise the directory name contained in the variable passed as argument:
+# Sanitize the directory name contained in the variable passed as argument:
 # - remove duplicate /
-# Usage: CT_SanitiseVarDir CT_PREFIX_DIR
-CT_SanitiseVarDir() {
+# - remove . (current dir) at the beginning, in the middle or at the end
+# - resolve .. (parent dir) if there is a previous component
+# - remove .. (parent dir) if at the root
+#
+# Usage: CT_SanitizeVarDir CT_PREFIX_DIR
+CT_SanitizeVarDir() {
     local var
     local old_dir
-    local new_dir
+    local new_dir tmp
 
     for var in "$@"; do
         eval "old_dir=\"\${${var}}\""
-        new_dir="$( printf "${old_dir}"     \
-                    |${sed} -r -e 's:/+:/:g;'  \
-                  )"
+        new_dir=$( echo "${old_dir}" | ${awk} '
+{
+    isabs = $1 == "" # Started with a slash
+    trail = $NF == "" # Ending with a slash
+    ncomp = 0 # Components in a path so far
+    for (i = 1; i <= NF; i++) {
+        # Double-slash or current dir? Ignore
+        if ($i == "" || $i == ".") {
+            continue;
+        }
+        # .. pops the last component unless it is at the beginning
+        if ($i == ".." && ncomp != 0 && comps[ncomp] != "..") {
+            ncomp--;
+            continue;
+        }
+        comps[++ncomp] = $i;
+    }
+    seencomp = 0
+    for (i = 1; i <= ncomp; i++) {
+        if (comps[i] == ".." && isabs) {
+            # /../ at the beginning is equivalent to /
+            continue;
+        }
+        printf "%s%s", isabs || i != 1 ? "/" : "", comps[i];
+        seencomp = 1;
+    }
+    if (!seencomp && !isabs && !trail) {
+        # Eliminated all components, but no trailing slash -
+        # if the result is appended with /foo, must not become absolute
+        printf ".";
+    }
+    if ((!seencomp && isabs) || (seencomp && trail)) {
+        printf "/";
+    }
+}' FS=/ )
         eval "${var}=\"${new_dir}\""
-        CT_DoLog DEBUG "Sanitised '${var}': '${old_dir}' -> '${new_dir}'"
+        CT_DoLog DEBUG "Sanitized '${var}': '${old_dir}' -> '${new_dir}'"
     done
 }
 
@@ -457,15 +574,15 @@ CT_DoForceRmdir() {
     local mode
     for dir in "${@}"; do
         [ -d "${dir}" ] || continue
-        case "$CT_SYS_OS" in
-            Linux|CYGWIN*)
+        case "${CT_CONFIGURE_has_stat_flavor_GNU},${CT_CONFIGURE_has_stat_flavor_BSD}" in
+            y,*)
                 mode="$(stat -c '%a' "$(dirname "${dir}")")"
                 ;;
-            Darwin|*BSD)
+            *,y)
                 mode="$(stat -f '%Lp' "$(dirname "${dir}")")"
                 ;;
             *)
-                CT_Abort "Unhandled host OS $CT_SYS_OS"
+                CT_Abort "Unknown stat format options"
                 ;;
         esac
         CT_DoExecLog ALL chmod u+w "$(dirname "${dir}")"
@@ -473,14 +590,6 @@ CT_DoForceRmdir() {
         CT_DoExecLog ALL rm -rf "${dir}"
         CT_DoExecLog ALL chmod ${mode} "$(dirname "${dir}")"
     done
-}
-
-# Echoes the specified string on stdout until the pipe breaks.
-# Doesn't fail
-# $1: string to echo
-# Usage: CT_DoYes "" |${make} oldconfig
-CT_DoYes() {
-    yes "$1" || true
 }
 
 # Add the specified directory to LD_LIBRARY_PATH, and export it
@@ -516,13 +625,8 @@ CT_SetLibPath() {
 # Build up the list of allowed tarball extensions
 # Add them in the prefered order; most preferred comes first
 CT_DoListTarballExt() {
-    if [ "${CT_CONFIGURE_has_xz}" = "y" ]; then
-        printf ".tar.xz\n"
-    fi
-    if [    "${CT_CONFIGURE_has_lzma}" = "y"    \
-         -o "${CT_CONFIGURE_has_xz}" = "y" ]; then
-        printf ".tar.lzma\n"
-    fi
+    printf ".tar.xz\n"
+    printf ".tar.lzma\n"
     printf ".tar.bz2\n"
     printf ".tar.gz\n.tgz\n"
     printf ".tar\n"
@@ -561,29 +665,34 @@ CT_DoGetFile() {
     local url="${1}"
     local dest="${CT_TARBALLS_DIR}/${url##*/}"
     local tmp="${dest}.tmp-dl"
+    local ok
+    local T
 
     # Remove potential left-over from a previous run
     rm -f "${tmp}"
 
-    # We also retry a few times, in case there is a transient error (eg. behind
-    # a dynamic IP that changes during the transfer...)
-    # With automated download as we are doing, it can be very dangerous to
-    # continue the downloads. It's far better to simply overwrite the
-    # destination file.
-    # Some company networks have firewalls to connect to the internet, but it's
-    # not easy to detect them, so force a global ${CT_CONNECT_TIMEOUT}-second
-    # timeout.
-    if [ ${CT_CONNECT_TIMEOUT} = -1 ]; then
-        T=
-    else
-        T="-T ${CT_CONNECT_TIMEOUT}"
+    # Replace a special value of '-1' with empty string
+    if [ ${CT_CONNECT_TIMEOUT} != -1 ]; then
+        T="${CT_CONNECT_TIMEOUT}"
     fi
-    if CT_DoExecLog ALL wget --passive-ftp --tries=3 -nc    \
-                             --progress=dot:binary          \
-                             ${T}                           \
-                             -O "${tmp}"                    \
-                             "${url}"
-    then
+
+    if [ "${CT_DOWNLOAD_AGENT_WGET}" = "y" ]; then
+        if CT_DoExecLog ALL wget ${CT_DOWNLOAD_WGET_OPTIONS} \
+                                 ${T:+-T ${T}}               \
+                                 -O "${tmp}"                 \
+                                 "${url}"; then
+            ok=y
+        fi
+    elif [ "${CT_DOWNLOAD_AGENT_CURL}" = "y" ]; then
+        if CT_DoExecLog ALL curl ${CT_DOWNLOAD_CURL_OPTIONS}  \
+                                 ${T:+--connect-timeout ${T}} \
+                                 -o "${tmp}"                  \
+                                 "${url}"; then
+            ok=y
+        fi
+    fi
+
+    if [ "${ok}" = "y" ]; then
         # Success, we got it, good!
         mv "${tmp}" "${dest}"
         CT_DoLog DEBUG "Got it from: \"${url}\""
@@ -625,39 +734,58 @@ CT_GetLocal() {
 }
 
 # This function gets the custom source from either a tarball or directory
-# Usage: CT_GetCustom <component> <custom_version> <custom_location>
+# Usage: CT_GetCustom <name> <version> <location>
 CT_GetCustom() {
-    local custom_component="$1"
-    local custom_version="$2"
-    local custom_location="$3"
-    local custom_name="${custom_component}-${custom_version}"
+    local component_name="$1"
+    local component_version="$2"
+    local component_location="$3"
 
-    CT_TestAndAbort "${custom_name}: CT_CUSTOM_LOCATION_ROOT_DIR or ${custom_component}'s CUSTOM_LOCATION must be set." \
-                    -z "${CT_CUSTOM_LOCATION_ROOT_DIR}" -a -z "${custom_location}"
+    # Some local variables we use to help us figure out what to do
+    local component_location_type="dir" # str: 'file' or 'dir'
+    local component_location_filename="" # filename... if it's a file
 
-    if [ -n "${CT_CUSTOM_LOCATION_ROOT_DIR}" \
-         -a -z "${custom_location}"          ]; then
-        custom_location="${CT_CUSTOM_LOCATION_ROOT_DIR}/${custom_component}"
+    CT_TestAndAbort \
+        "${component_name}: Custom location setting is empty" \
+        -z "${component_location}"
+
+    CT_TestAndAbort \
+        "${component_name}: Custom version setting is empty" \
+        -z "${component_version}"
+
+    if [ -f "${component_location}" ]; then
+        component_location_type="file"
+        component_location_filename="$(basename ${component_location})"
+    elif [ -d "${component_location}" ]; then
+        # Yes, it's the default, but it rules out the else case in the `if'.
+        component_location_type="dir"
+        # as -d and -f say: it's a <directory|file> and is readable!
+    else
+        CT_Abort "${component_name}: Unable to read ${component_location}, make sure the setting is correct and double check the permissions!"
     fi
 
-    CT_DoLog EXTRA "Using '${custom_name}' from custom location"
-    if [ ! -d "${custom_location}" ]; then
+    if [ "${component_location_type}" = "file" ]; then
+        CT_DoLog EXTRA "Got '${component_location}' from custom location"
         # We need to know the custom tarball extension,
         # so we can create a properly-named symlink, which
         # we use later on in 'extract'
-        case "${custom_location}" in
-            *.tar.xz)       custom_name="${custom_name}.tar.xz";;
-            *.tar.bz2)      custom_name="${custom_name}.tar.bz2";;
-            *.tar.gz|*.tgz) custom_name="${custom_name}.tar.gz";;
-            *.tar)          custom_name="${custom_name}.tar";;
-            *)  CT_Abort "Unknown extension for custom tarball '${custom_location}'";;
+        case "${component_location}" in
+            *.tar.xz|*.tar.bz2|*.tar.lzma|*.tar.gz|*.tgz|*.tar|*.zip) ;;
+            *) CT_Abort "Unknown extension for custom tarball '${component_location}'" ;;
         esac
-        CT_DoExecLog DEBUG ln -sf "${custom_location}"  \
-                                  "${CT_TARBALLS_DIR}/${custom_name}"
-    else
-        CT_DoExecLog DEBUG ln -snf "${custom_location}" \
-                                   "${CT_SRC_DIR}/${custom_name}"
+        [ ! -L "${CT_TARBALLS_DIR}/${component_location_filename}" ] && \
+            CT_DoExecLog DEBUG ln -sf "${component_location}" \
+            "${CT_TARBALLS_DIR}/${component_location_filename}"
+    elif [ "${component_location_type}" = "dir" ]; then
+        CT_DoLog EXTRA "Got '${component_location}' from custom location"
+        [ ! -d "${CT_SRC_DIR}/${component_name}-${component_version}" ] && \
+            CT_DoExecLog DEBUG ln -sf "${component_location}" \
+            "${CT_SRC_DIR}/${component_name}-${component_version}"
+
+        # Don't try to extract from source directory, it's extracted!
+        touch "${CT_SRC_DIR}/.${component_name}-${component_version}.extracted"
     fi
+    # Don't patch a custom source, it's custom!
+    touch "${CT_SRC_DIR}/.${component_name}-${component_version}.patched"
 }
 
 # This function saves the specified to local storage if possible,
@@ -739,6 +867,40 @@ CT_GetFile() {
     # Just return error, someone may want to catch and handle the error
     # (eg. glibc add-ons can be missing).
     return 1
+}
+
+# Get a component from Linaro archives.
+# Usage: CT_GetLinaro <component> <version>
+CT_GetLinaro() {
+    local comp="$1"
+    local version="$2"
+    local linaro_version
+    local yyyymm_p
+    local yymm
+    local base
+
+    case "${version}" in
+        linaro-*)
+            linaro_version="${version#linaro-}"
+            ;;
+        *)
+            CT_Abort "Version ${version} is not a Linaro package"
+            ;;
+    esac
+
+    # Recent releases reside in top of the directory tree; older releases
+    # are moved into the archive. Subdirectories are named differently
+    # in archive!
+    # In archive, some URLs also contain base component version
+    # (e.g. "gcc-linaro/4.9") while some do not (e.g. just "newlib-linaro").
+    base="${linaro_version%%-*}"
+    # Strip base version, first two digits of the year and optional patchlevel
+    yymm="${linaro_version#*-??}"
+    yymm="${yymm%-*}"
+    CT_GetFile "${comp}-${version}" \
+        "https://releases.linaro.org/components/toolchain/${comp}-linaro/${linaro_version}" \
+        "https://releases.linaro.org/archive/${yymm}/components/toolchain/${comp}-linaro/${base}" \
+        "https://releases.linaro.org/archive/${yymm}/components/toolchain/${comp}-linaro"
 }
 
 # Checkout from CVS, and build the associated tarball
@@ -851,10 +1013,10 @@ CT_GetGit() {
             CT_DoLog WARN "Ambiguous ref ${ref} at ${url}, using first"
         fi
         local cset=$(echo "$matches" | head -n1 | cut -c1-6)
-        CT_DoLog INFO "ref ${ref} at ${url} has cset of ${cset}"
+        CT_DoLog DEBUG "ref ${ref} at ${url} has cset of ${cset}"
     else
         local cset=${cset_or_ref}
-        CT_DoLog INFO "cset ${cset}"
+        CT_DoLog DEBUG "cset ${cset}"
     fi
 
     if [ -n "${_out_cset}" ]; then
@@ -907,7 +1069,7 @@ CT_GetGit() {
     else
         # Woops...
         CT_DoExecLog ALL rm -rf "${dir}"
-        CT_DoLog Debug "Could not clone '${basename}'"
+        CT_DoLog DEBUG "Could not clone '${basename}'"
         return 1
     fi
 }
@@ -925,7 +1087,6 @@ CT_Extract() {
     local nochdir="$1"
     local basename
     local ext
-    local lzma_prog
     local -a tar_opts
 
     if [ "${nochdir}" = "nochdir" ]; then
@@ -938,17 +1099,17 @@ CT_Extract() {
     basename="$1"
     shift
 
-    if ! ext="$(CT_GetFileExtension "${basename}")"; then
-        CT_DoLog WARN "'${basename}' not found in '${CT_TARBALLS_DIR}'"
-        return 1
-    fi
-    local full_file="${CT_TARBALLS_DIR}/${basename}${ext}"
-
     # Check if already extracted
     if [ -e "${CT_SRC_DIR}/.${basename}.extracted" ]; then
         CT_DoLog DEBUG "Already extracted '${basename}'"
         return 0
     fi
+
+    if ! ext="$(CT_GetFileExtension "${basename}")"; then
+	CT_DoLog WARN "'${basename}' not found in '${CT_TARBALLS_DIR}'"
+	return 1
+    fi
+    local full_file="${CT_TARBALLS_DIR}/${basename}${ext}"
 
     # Check if previously partially extracted
     if [ -e "${CT_SRC_DIR}/.${basename}.extracting" ]; then
@@ -968,19 +1129,9 @@ CT_Extract() {
     tar_opts+=( "-C" "${basename}" )
     tar_opts+=( "-xv" )
 
-    # One note here:
-    # - lzma can be handled either with 'xz' or 'lzma'
-    # - we get lzma tarball only if either or both are available
-    # - so, if we get an lzma tarball, and either 'xz' or 'lzma' is
-    #   missing, we can assume the other is available
-    if [ "${CT_CONFIGURE_has_lzma}" = "y" ]; then
-        lzma_prog="lzma -fdc"
-    else
-        lzma_prog="xz -fdc"
-    fi
     case "${ext}" in
         .tar.xz)      xz -fdc "${full_file}" | CT_DoExecLog FILE tar "${tar_opts[@]}" -f -;;
-        .tar.lzma)    ${lzma_prog} "${full_file}" | CT_DoExecLog FILE tar "${tar_opts[@]}" -f -;;
+        .tar.lzma)    xz -fdc "${full_file}" | CT_DoExecLog FILE tar "${tar_opts[@]}" -f -;;
         .tar.bz2)     bzip2 -dc "${full_file}" | CT_DoExecLog FILE tar "${tar_opts[@]}" -f -;;
         .tar.gz|.tgz) gzip -dc "${full_file}" | CT_DoExecLog FILE tar "${tar_opts[@]}" -f -;;
         .tar)         CT_DoExecLog FILE tar "${tar_opts[@]}" -f "${full_file}";;
@@ -1022,7 +1173,7 @@ CT_ExtractGit() {
     if [ -z "${ref}" ]; then
         ref_type=head
         ref=$(git rev-list -n1 HEAD)
-    elif git tag |${grep} -E "^${ref}$" >/dev/null 2>&1; then
+    elif git tag |{grep} -E "^${ref}$" >/dev/null 2>&1; then
         ref_type=tag
     elif git branch -a --no-color |${grep} -E "^. ${ref}$" >/dev/null 2>&1; then
         ref_type=branch
@@ -1126,7 +1277,7 @@ CT_Patch() {
         fi
     done
 
-    if [ "${CT_OVERIDE_CONFIG_GUESS_SUB}" = "y" ]; then
+    if [ "${CT_OVERRIDE_CONFIG_GUESS_SUB}" = "y" ]; then
         CT_DoLog ALL "Overiding config.guess and config.sub"
         for cfg in config_guess config_sub; do
             eval ${cfg}="${CT_LIB_DIR}/scripts/${cfg/_/.}"
@@ -1160,6 +1311,14 @@ CT_DoConfigSub() {
     else
         "${CT_LIB_DIR}/scripts/config.sub" "$@"
     fi
+}
+
+# Normally, each step is executed in a sub-shell and thus cannot modify the
+# environment for the next step(s). When this is needed, it can do so by
+# invoking this function.
+# Usage: CT_EnvModify VAR VALUE
+CT_EnvModify() {
+    echo "${1}=\"${2}\"" >> "${CT_BUILD_DIR}/env.modify.sh"
 }
 
 # Compute the target tuple from what is provided by the user
@@ -1282,6 +1441,23 @@ CT_DoBuildTargetTuple() {
 
     # Now on for the target LDFLAGS
     CT_ARCH_TARGET_LDFLAGS="${CT_ARCH_TARGET_LDFLAGS} ${CT_ARCH_ENDIAN_LDFLAG}"
+
+    # Now, a multilib quirk. We may not be able to pass CT_ARCH_TARGET_CFLAGS
+    # and CT_ARCH_TARGET_LDFLAGS to gcc: even though GCC build appends the multilib
+    # flags afterwards, on some architectures the build breaks because some
+    # flags do not completely override each other. For example, on mips target,
+    # 'gcc -mabi=32' and 'gcc -mabi=n32' both work, but 'gcc -mabi=32 -mabi=n32'
+    # triggers an internal linker error. Likely a bug in GNU binutils, but we
+    # have to work it around for now: *do not pass the CT_ARCH_TARGET_ flags*.
+    # Instead, save them into a different variable here. Then, after the first
+    # core pass, we'll know which of them vary with multilibs (i.e. must be
+    # filtered out).
+    if [ "${CT_MULTILIB}" = "y" ]; then
+        CT_ARCH_TARGET_CFLAGS_MULTILIB="${CT_ARCH_TARGET_CFLAGS}"
+        CT_ARCH_TARGET_CFLAGS=
+        CT_ARCH_TARGET_LDFLAGS_MULTILIB="${CT_ARCH_TARGET_LDFLAGS}"
+        CT_ARCH_TARGET_LDFLAGS=
+    fi
 }
 
 # This function does pause the build until the user strikes "Return"
@@ -1375,16 +1551,15 @@ CT_DoSaveState() {
                            /^(FUNCNAME|GROUPS|PPID|SHELLOPTS)=/d;' >"${state_dir}/env.sh"
 
     CT_DoTarballIfExists "${CT_BUILDTOOLS_PREFIX_DIR}" "${state_dir}/buildtools_dir"
-    CT_DoTarballIfExists "${CT_CONFIG_DIR}" "${state_dir}/config_dir"
     CT_DoTarballIfExists "${CT_PREFIX_DIR}" "${state_dir}/prefix_dir" --exclude '*.log'
 
     CT_DoLog STATE "  Saving log file"
-    exec >/dev/null
+    CT_LogDisable
     case "${CT_DEBUG_CT_SAVE_STEPS_GZIP}" in
-        y)  gzip -3 -c "${tmp_log_file}"  >"${state_dir}/log.gz";;
-        *)  cat "${tmp_log_file}" >"${state_dir}/log";;
+        y)  gzip -3 -c "${CT_BUILD_LOG}"  >"${state_dir}/log.gz";;
+        *)  cat "${CT_BUILD_LOG}" >"${state_dir}/log";;
     esac
-    exec >>"${tmp_log_file}"
+    CT_LogEnable
 }
 
 # This function restores a previously saved state
@@ -1397,15 +1572,9 @@ CT_DoLoadState(){
 
     CT_TestOrAbort "The previous build did not reach the point where it could be restarted at '${CT_RESTART}'" -d "${state_dir}"
 
-    # We need to do something special with the log file!
-    if [ "${CT_LOG_TO_FILE}" = "y" ]; then
-        exec >"${state_dir}/tail.log"
-    fi
-
     CT_DoLog INFO "Restoring state at step '${state_name}', as requested."
 
     CT_DoExtractTarballIfExists "${state_dir}/prefix_dir" "${CT_PREFIX_DIR}"
-    CT_DoExtractTarballIfExists "${state_dir}/config_dir" "${CT_CONFIG_DIR}"
     CT_DoExtractTarballIfExists "${state_dir}/buildtools_dir" "${CT_BUILDTOOLS_PREFIX_DIR}"
 
     # Restore the environment, discarding any error message
@@ -1419,26 +1588,23 @@ CT_DoLoadState(){
     unset old_stop old_restart
 
     CT_DoLog STATE "  Restoring log file"
-    exec >/dev/null
+    CT_LogDisable
+    mv "${CT_BUILD_LOG}" "${CT_BUILD_LOG}.tail"
     case "${CT_DEBUG_CT_SAVE_STEPS_GZIP}" in
-        y)  gzip -dc "${state_dir}/log.gz" >"${tmp_log_file}";;
-        *)  cat "${state_dir}/log" >"${tmp_log_file}";;
+        y)  gzip -dc "${state_dir}/log.gz" >"${CT_BUILD_LOG}";;
+        *)  cat "${state_dir}/log" >"${CT_BUILD_LOG}";;
     esac
-    if [ "${CT_LOG_TO_FILE}" = "y" ]; then
-        cat "${state_dir}/tail.log" >>"${tmp_log_file}"
-    fi
-    exec >>"${tmp_log_file}"
-    if [ "${CT_LOG_TO_FILE}" = "y" ]; then
-        rm -f "${state_dir}/tail.log"
-    fi
+    cat "${CT_BUILD_LOG}.tail" >>"${CT_BUILD_LOG}"
+    CT_LogEnable
+    rm -f "${CT_BUILD_LOG}.tail"
 }
 
 # This function sets a kconfig option to a specific value in a .config file
 # Usage: CT_KconfigSetOption <option> <value> <file>
 CT_KconfigSetOption() {
-    option="$1"
-    value="$2"
-    file="$3"
+    local option="$1"
+    local value="$2"
+    local file="$3"
 
     ${grep} -E -q "^${option}=.*" "${file}" && \
         ${sed} -i -r -e "s;^${option}=.*$;${option}=${value};" "${file}" || \
@@ -1450,8 +1616,8 @@ CT_KconfigSetOption() {
 # This function enables a kconfig option to '=y' in a .config file
 # Usage: CT_KconfigEnableOption <option> <file>
 CT_KconfigEnableOption() {
-    option="$1"
-    file="$2"
+    local option="$1"
+    local file="$2"
 
     CT_KconfigSetOption "${option}" "y" "${file}"
 }
@@ -1459,8 +1625,8 @@ CT_KconfigEnableOption() {
 # This function disables a kconfig option in a .config file
 # Usage: CT_KconfigDisableOption <option> <file>
 CT_KconfigDisableOption() {
-    option="${1}"
-    file="${2}"
+    local option="${1}"
+    local file="${2}"
 
     ${grep} -E -q "^# ${option} is not set$" "${file}" || \
     ${grep} -E -q "^${option}=.*$" "${file}" && \
@@ -1472,11 +1638,281 @@ CT_KconfigDisableOption() {
 # is set or commented out.
 # Usage: CT_KconfigDeleteOption <option> <file>
 CT_KconfigDeleteOption() {
-    option="${1}"
-    file="${2}"
+    local option="${1}"
+    local file="${2}"
 
     ${grep} -E -q "^# ${option} is not set$" "${file}" && \
         ${sed} -i -r -e "/^# ${option} is not set$/d" "${file}" || \
     ${grep} -E -q "^${option}=.*$" "${file}" && \
         ${sed} -i -r -e "/^${option}=.*$/d" "${file}" || true
+}
+
+# Multilib iterator. The caller should be in a directory where the directories
+# will be created, one per multilib, and the specified command will be run in
+# each of them. The following arguments will be passed to the invoked command:
+#   multi_flags       CFLAGS for this multilib
+#   multi_dir         GCC internal library location for the multilib
+#   multi_os_dir      OS library location for the multilib
+#   multi_os_dir_gcc  Same as multi_os_dir, preserved from GCC output
+#   multi_root        Sysroot for this multilib
+#   multi_target      Target tuple, either as reported by GCC or by our guesswork
+#   multi_count       Total number of multilibs
+#   multi_index       Index of the current multilib
+# Any additional arguments passed to this function will be forwarded to the called
+# function as well.
+# Usage: CT_IterateMultilibs <function> <prefix> <additional-args...>
+CT_IterateMultilibs() {
+    local func="${1}"
+    local prefix="${2}"
+    local -a multilibs
+    local multi_dir multi_os_dir multi_os_dir_gcc multi_root multi_flags multi_index multi_target
+    local root_suffix
+    local dir_postfix
+
+    # Name used internally below
+    if [ "${prefix}" = "sysroot-check" ]; then
+        CT_Abort "Bad prefix used in CT_IterateMultilibs"
+    fi
+
+    # Drop mandatory arguments
+    shift 2
+
+    # If gcc is not configured for multilib, it still prints a single line
+    # for the default settings
+    multilibs=( $("${CT_TARGET}-${CT_CC}" -print-multi-lib 2>/dev/null) )
+    CT_DoExecLog ALL rm -rf "sysroot-check"
+    for multilib in "${multilibs[@]}"; do
+        # GCC makes the distinction between:
+        #   multilib (-print-multi-lib or -print-multi-directory) and
+        #   multilib-os (--print-multi-os-directory)
+        # as the gcc library and gcc sysroot library paths, respectively.
+        # For example, on x86_64:
+        #   multilib:    -m32=32      -m64=.
+        #   multilib-os: -m32=../lib  -m64=../lib64
+        # Moreover, while some multilibs can coexist in the same sysroot (e.g.
+        # on x86), some have a "sysroot suffix" to separate incompatible variants.
+        # Such sysroot suffixes combine with multilib-os directories, e.g.
+        # on sh4 with -m4a multilib, the search order in sysroot is (dropping some
+        # directories for brevity:
+        #   <sysroot>/m4a/lib/m4a/
+        #   <sysroot>/m4a/usr/lib/m4a/
+        #   <sysroot>/m4a/lib/
+        #   <sysroot>/m4a/usr/lib/
+        # The problem is that while GCC itself is aware of these subtleties, the
+        # binutils (notably, ld) it invokes under the hood are not. For example,
+        # if a shared library libfoo.so.1 requires libbar.so.1, ld will only search
+        # for libbar.so.1 in <sysroot>/m4a/usr/lib, but not in <sysroot>/m4a/usr/lib/m4a.
+        # In other words, 'gcc -lfoo -lbar' will work for both the default and -m4a
+        # cases, and 'gcc -lfoo' will work for the default, but not for -m4a. To
+        # address this, we first try to determine if the sysroot alone makes the
+        # configuration sufficiently unique. If there are no multilibs within the
+        # same suffixed sysroot, we can drop the multi_os_dir and both gcc and ld
+        # will work. If not, we'll supply both multi_root/multi_os_dir (which will
+        # likely break later, e.g. while building final GCC with C++ support). But,
+        # we've done all we can.
+        # We do supply original multi_os_dir for consumers that need to look inside
+        # GCC's directories (e.g. to locate the libraries), under the name of
+        # multi_os_dir_gcc.
+        multi_flags=$( echo "${multilib#*;}" | ${sed} -r -e 's/@/ -/g;' )
+        multi_dir="${multilib%%;*}"
+        multi_os_dir=$( "${CT_TARGET}-${CT_CC}" -print-multi-os-directory ${multi_flags} )
+        multi_root=$( "${CT_TARGET}-${CT_CC}" -print-sysroot ${multi_flags} )
+        root_suffix="${multi_root#${CT_SYSROOT_DIR}}"
+        CT_DoExecLog ALL mkdir -p "sysroot-check${root_suffix}"
+        if [ -e "sysroot-check${root_suffix}/seen" ]; then
+            CT_DoExecLog ALL rm -f "sysroot-check${root_suffix}/unique"
+        else
+            CT_DoExecLog ALL touch "sysroot-check${root_suffix}/seen" \
+                "sysroot-check${root_suffix}/unique"
+        fi
+    done
+
+    # Now, actual iteration.
+    # This uses either GCC's multiarch feature (if supported; if not,
+    # GCC prints nothing and exits with status 0), falling back to calling
+    # the architecture-specific functions.
+    multi_index=1
+    for multilib in "${multilibs[@]}"; do
+        multi_flags=$( echo "${multilib#*;}" | ${sed} -r -e 's/@/ -/g;' )
+        multi_dir="${multilib%%;*}"
+        multi_os_dir=$( "${CT_TARGET}-${CT_CC}" -print-multi-os-directory ${multi_flags} )
+        multi_os_dir_gcc="${multi_os_dir}"
+        multi_root=$( "${CT_TARGET}-${CT_CC}" -print-sysroot ${multi_flags} )
+        multi_target=$( "${CT_TARGET}-${CT_CC}" -print-multiarch ${multi_flags} )
+        root_suffix="${multi_root#${CT_SYSROOT_DIR}}"
+
+        # If GCC did not report the target tuple (i.e. this configuration is not
+        # multiarch-capable), fall back to our guesswork.
+        if [ -z "${multi_target}" ]; then
+            multi_target="${CT_TARGET}"
+            CT_DoArchMultilibTarget multi_target ${multi_flags}
+        fi
+
+        # Avoid multi_os_dir if it's the only directory in this sysroot.
+        if [ -e "sysroot-check${root_suffix}/unique" ]; then
+            multi_os_dir=.
+        fi
+
+        # Brain-dead Cygwin hack: Cygwin cannot run a binary if there is a directory
+        # component in the path that ends with a dot. Unfortunately, that's the case
+        # for the default library name with GCC.
+        dir_postfix=_${multi_dir//\//_}
+        dir_postfix=${dir_postfix%_.}
+        CT_mkdir_pushd "${prefix}${dir_postfix}"
+        $func multi_dir="${multi_dir}"               \
+              multi_os_dir="${multi_os_dir}"         \
+              multi_os_dir_gcc="${multi_os_dir_gcc}" \
+              multi_flags="${multi_flags}"           \
+              multi_root="${multi_root}"             \
+              multi_target="${multi_target}"         \
+              multi_index="${multi_index}"           \
+              multi_count="${#multilibs[@]}"         \
+              "$@"
+        CT_Popd
+        multi_index=$((multi_index+1))
+    done
+}
+
+# Create symbolic links in buildtools for binutils using a different
+# target name.
+# Usage:
+#   CT_SymlinkTools BIN-DIR SRC-DIR NEW-PREFIX SED-EXPR
+CT_SymlinkTools()
+{
+    local bindir="$1"
+    local srcdir="$2"
+    local newpfx="$3"
+    local sedexpr="$4"
+    local dirpfx
+    local t _t
+
+    # if bindir==srcdir, create symlinks just with the filename
+    if [ "${bindir}" != "${srcdir}" ]; then
+        dirpfx="${srcdir}/"
+    fi
+
+    CT_Pushd "${srcdir}"
+    for t in "${CT_TARGET}-"*; do
+        if [ "${t}" = "${CT_TARGET}-*" ]; then
+            # No matching files
+            break
+        fi
+        if [ -n "${newpfx}" -a \( "${newpfx}" != "${CT_TARGET}" -o "${bindir}" != "${srcdir}" \) ]; then
+            _t="${newpfx}-${t#${CT_TARGET}-}"
+            CT_DoExecLog ALL ln -sfv "${dirpfx}${t}" "${bindir}/${_t}"
+        fi
+        if [ -n "${sedexpr}" ]; then
+            _t=$( echo "${t}" | sed -r -e "${sedexpr}" )
+            if [ "${_t}" = "${t}" ]; then
+                CT_DoLog WARN "The sed expression '${sedexpr}' has no effect on '${t}'"
+            else
+                CT_DoExecLog ALL ln -sfv "${dirpfx}${t}" "${bindir}/${_t}"
+            fi
+        fi
+    done
+    CT_Popd
+}
+
+# Create symbolic links for multilib iterator. Expects ${multi_target}
+# variable to indicate the desired triplet for the tools.
+CT_SymlinkToolsMultilib()
+{
+    # Make configure detect ${target}-tool binaries even if it is different
+    # from configured tuple. Only symlink to final tools if they're executable
+    # on build.
+    CT_SymlinkTools "${CT_BUILDTOOLS_PREFIX_DIR}/bin" \
+        "${CT_BUILDTOOLS_PREFIX_DIR}/bin" "${multi_target}"
+    case "${CT_TOOLCHAIN_TYPE}" in
+        native|cross)
+            CT_SymlinkTools "${CT_BUILDTOOLS_PREFIX_DIR}/bin" \
+                "${CT_PREFIX_DIR}/bin" "${multi_target}"
+            ;;
+    esac
+}
+
+# Helper (iterator) for CT_MultilibFixupLDSO
+CT__FixupLDSO()
+{
+    local multi_dir multi_os_dir multi_root multi_flags multi_index multi_count multi_target
+    local binary
+    local ldso ldso_l ldso_f ldso_d ldso_u multilib_dir
+
+    for arg in "$@"; do
+        eval "${arg// /\\ }"
+    done
+
+    CT_DoLog EXTRA "Checking dynamic linker for multilib '${multi_flags}'"
+
+    multilib_dir="/lib/${multi_os_dir}"
+    CT_SanitizeVarDir multilib_dir
+
+    CT_DoExecLog ALL "${CT_TARGET}-${CT_CC}" -o test-ldso ../test-ldso.c ${multi_flags}
+    if [ -r "test-ldso.gdb" ]; then
+        binary="test-ldso.gdb"
+    else
+        binary="test-ldso"
+    fi
+    if ${CT_TARGET}-readelf -Wl "${binary}" | grep -q 'Requesting program interpreter: '; then
+        ldso=$( ${CT_TARGET}-readelf -Wl "${binary}" | \
+            grep 'Requesting program interpreter: ' | \
+            sed -e 's,.*: ,,' -e 's,\].*,,' )
+    fi
+    CT_DoLog DEBUG "Detected dynamic linker for multilib '${multi_flags}': '${ldso}'"
+
+    # Create symlink if GCC produced a dynamically linked executable.
+    if [ -z "${ldso}" ]; then
+        return # Probably, we're building a static toolchain.
+    fi
+
+    ldso_d="${ldso%/ld*.so.*}"
+    ldso_f="${ldso##*/}"
+
+    # Convert ldso_d to "how many levels we need to go up" and remove
+    # leading slash.
+    ldso_u=$( echo "${ldso_d#/}" | sed 's,[^/]\+,..,g' )
+
+    # If the requested dynamic linker exists, but is a symlink - check that it is either
+    # relative (in which case, if it is readable, we trust libc to have created it properly)
+    # or otherwise, convert it from absolute (target) path to a relative path that works on
+    # both host & target.
+    if [ -L "${multi_root}${ldso}" ]; then
+        ldso_l=`readlink "${multi_root}${ldso}"`
+        case "${ldso_l}" in
+            /*) # Absolute, convert to relative
+                if [ -r "${multi_root}${ldso_l}" ]; then
+                    CT_DoExecLog ALL ln -sfv "${ldso_u}${ldso_l}" "${multi_root}${ldso}"
+                else
+                    CT_DoLog WARN "Compiler selects '${ldso}' as dynamic linker for '${multi_flags}'"
+                    CT_DoLog WARN "but '${ldso}' is a symlink to '${ldso_l}' which is not valid on target."
+                fi
+                ;;
+            *) # Relative, must be readable
+                if [ ! -r "${multi_root}${ldso}" ]; then
+                    CT_DoLog WARN "Compiler selects '${ldso}' as dynamic linker for '${multi_flags}'"
+                    CT_DoLog WARN "but '${ldso}' is a symlink to '${ldso_l}' which is invalid relative symlink."
+                fi
+                ;;
+        esac
+        return
+    elif [ -r "${multi_root}${ldso}" ]; then
+        return # Not a symlink but readable - looks like libc installed a real executable.
+    fi
+
+    # Is it requesting a linker not in the current directory? uClibc case.
+    if [ "${ldso_d}" != "${multilib_dir}" ]; then
+        CT_DoExecLog ALL ln -sfv "${ldso_u}${multilib_dir}/${ldso_f}" \
+            "${multi_root}${ldso}"
+    fi
+}
+
+# Go over multilib variants and check that the requested dynamic linker
+# is present and resolves on both target and host.
+CT_MultilibFixupLDSO()
+{
+    CT_DoStep INFO "Checking dynamic linker symlinks"
+    CT_mkdir_pushd "${CT_BUILD_DIR}/build-libc-check-ldso"
+    echo "int main(void) { return 0; }" > test-ldso.c
+    CT_IterateMultilibs CT__FixupLDSO ldso_fixup
+    CT_Popd
+    CT_EndStep
 }

@@ -43,34 +43,11 @@ do_mpfr_extract() {
             fi
             CT_Popd
             ;;
-        1.*|2.0.*|2.1.*|2.2.*|2.3.*)
-            CT_Pushd "${CT_SRC_DIR}/mpfr-${CT_MPFR_VERSION}"
-            if [ ! -f .autotools.ct-ng ]; then
-                CT_DoLog DEBUG "Re-building autotools files"
-                CT_DoExecLog ALL autoreconf -fi
-                # Starting with libtool-1.9f, config.{guess,sub} are no longer
-                # installed without -i, but starting with libtool-2.2.6, they
-                # are no longer removed without -i. Sight... Just use -i with
-                # libtool >=2
-                # See: http://sourceware.org/ml/crossgcc/2008-11/msg00046.html
-                # and: http://sourceware.org/ml/crossgcc/2008-11/msg00048.html
-                libtoolize_opt=
-                case "$(${libtoolize} --version |head -n 1 |${awk} '{ print $(NF); }')" in
-                    0.*)    ;;
-                    1.*)    ;;
-                    *)      libtoolize_opt=-i;;
-                esac
-                CT_DoExecLog ALL ${libtoolize} -f ${libtoolize_opt}
-                touch .autotools.ct-ng
-            fi
-            CT_Popd
-            ;;
     esac
 }
 
 # Build MPFR for running on build
 # - always build statically
-# - we do not have build-specific CFLAGS
 # - install in build-tools prefix
 do_mpfr_for_build() {
     local -a mpfr_opts
@@ -139,6 +116,7 @@ do_mpfr_backend() {
     CC="${host}-gcc"                                    \
     CFLAGS="${cflags}"                                  \
     LDFLAGS="${ldflags}"                                \
+    ${CONFIG_SHELL}                                     \
     "${CT_SRC_DIR}/mpfr-${CT_MPFR_VERSION}/configure"   \
         --build=${CT_BUILD}                             \
         --host=${host}                                  \
@@ -148,15 +126,20 @@ do_mpfr_backend() {
         --enable-static
 
     CT_DoLog EXTRA "Building MPFR"
-    CT_DoExecLog ALL ${make} ${JOBSFLAGS}
+    CT_DoExecLog ALL make ${JOBSFLAGS}
 
     if [ "${CT_COMPLIBS_CHECK}" = "y" ]; then
-        CT_DoLog EXTRA "Checking MPFR"
-        CT_DoExecLog ALL ${make} ${JOBSFLAGS} -s check
+        if [ "${host}" = "${CT_BUILD}" ]; then
+            CT_DoLog EXTRA "Checking MPFR"
+            CT_DoExecLog ALL make ${JOBSFLAGS} -s check
+        else
+            # Cannot run host binaries on build in a canadian cross
+            CT_DoLog EXTRA "Skipping check for MPFR on the host"
+        fi
     fi
 
     CT_DoLog EXTRA "Installing MPFR"
-    CT_DoExecLog ALL ${make} install
+    CT_DoExecLog ALL make install
 }
 
 fi # CT_MPFR

@@ -35,3 +35,71 @@ CT_DoArchTupleValues () {
     esac
     CT_ARCH_FLOAT_CFLAG=
 }
+
+CT_DoArchMultilibList() {
+    local save_ifs="${IFS}"
+    local new
+    local x
+
+    # In a configuration for SuperH, GCC list of multilibs shall not include
+    # the default CPU. E.g. if configuring for sh4-*-*, we need to remove
+    # "sh4" or "m4" from the multilib list. Otherwise, the resulting compiler
+    # will fail when that CPU is selected explicitly "sh4-multilib-linux-gnu-gcc -m4 ..."
+    # as it will fail to find the sysroot with that suffix.
+    IFS=,
+    for x in ${CT_CC_GCC_MULTILIB_LIST}; do
+        if [ "${x}" = "${CT_ARCH_SH_VARIANT}" -o "sh${x#m}" = "${CT_ARCH_SH_VARIANT}" ]; then
+            CT_DoLog WARN "Ignoring '${x}' in multilib list: it is the default multilib"
+            continue
+        fi
+        new="${new:+${new},}${x}"
+    done
+    IFS="${save_ifs}"
+    CT_CC_GCC_MULTILIB_LIST="${new}"
+    CT_DoLog DEBUG "Adjusted CT_CC_GCC_MULTILIB_LIST to '${CT_CC_GCC_MULTILIB_LIST}'"
+}
+
+CT_DoArchUClibcConfig() {
+    local cfg="${1}"
+
+    # FIXME: uclibc (!ng) seems to support sh64 (sh5), too
+    CT_DoArchUClibcSelectArch "${cfg}" "sh"
+    CT_KconfigDisableOption "CONFIG_SH3" "${cfg}"
+    CT_KconfigDisableOption "CONFIG_SH4" "${cfg}"
+    CT_KconfigDisableOption "CONFIG_SH4A" "${cfg}"
+    case "${CT_ARCH_SH_VARIANT}" in
+        sh3) CT_KconfigEnableOption "CONFIG_SH3" "${cfg}";;
+        sh4) CT_KconfigEnableOption "CONFIG_SH4" "${cfg}";;
+        sh4a) CT_KconfigEnableOption "CONFIG_SH4A" "${cfg}";;
+    esac
+}
+
+CT_DoArchUClibcCflags() {
+    local cfg="${1}"
+    local cflags="${2}"
+    local f
+
+    for f in ${cflags}; do
+        case "${f}" in
+            -m3)
+                CT_KconfigEnableOption "CONFIG_SH3" "${cfg}"
+                ;;
+            -m4)
+                CT_KconfigEnableOption "CONFIG_SH4" "${cfg}"
+                CT_KconfigEnableOption "UCLIBC_HAS_FPU" "${cfg}"
+                ;;
+            -m4-nofpu)
+                CT_KconfigEnableOption "CONFIG_SH4" "${cfg}"
+                CT_KconfigDisableOption "UCLIBC_HAS_FPU" "${cfg}"
+                ;;
+            -m4a)
+                CT_KconfigEnableOption "CONFIG_SH4A" "${cfg}"
+                CT_KconfigEnableOption "UCLIBC_HAS_FPU" "${cfg}"
+                ;;
+            -m4a-nofpu)
+                CT_KconfigEnableOption "CONFIG_SH4A" "${cfg}"
+                CT_KconfigDisableOption "UCLIBC_HAS_FPU" "${cfg}"
+                ;;
+        esac
+    done
+}

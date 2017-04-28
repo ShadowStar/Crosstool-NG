@@ -19,18 +19,13 @@ config GETTEXT_NEEDED
     select COMPLIBS_NEEDED
 
 config GMP_NEEDED
-    bool
+    def_bool y
     select GMP
     select COMPLIBS_NEEDED
 
 config MPFR_NEEDED
-    bool
+    def_bool y
     select MPFR
-    select COMPLIBS_NEEDED
-
-config PPL_NEEDED
-    bool
-    select PPL
     select COMPLIBS_NEEDED
 
 config ISL_NEEDED
@@ -44,7 +39,7 @@ config CLOOG_NEEDED
     select COMPLIBS_NEEDED
 
 config MPC_NEEDED
-    bool
+    def_bool y
     select MPC
     select COMPLIBS_NEEDED
 
@@ -67,11 +62,15 @@ config COMPLIBS
     bool
 
 config LIBICONV
-    bool
+    bool "Build local libiconv"
+    default y if CANADIAN || CROSS_NATIVE
     select COMPLIBS
 
 config GETTEXT
-    bool
+    bool "Build local gettext"
+    default y if CANADIAN || CROSS_NATIVE
+    select LIBICONV_NEEDED
+    select NCURSES_NEEDED
     select COMPLIBS
 
 config GMP
@@ -79,11 +78,6 @@ config GMP
     select COMPLIBS
 
 config MPFR
-    bool
-    select GMP
-    select COMPLIBS
-
-config PPL
     bool
     select GMP
     select COMPLIBS
@@ -125,6 +119,12 @@ config NCURSES
 config NCURSES_TARGET
     bool
 
+config ZLIB
+    bool "Build local zlib"
+
+if ZLIB
+source "config/companion_libs/zlib.in"
+endif
 if LIBICONV
 source "config/companion_libs/libiconv.in"
 endif
@@ -136,9 +136,6 @@ source "config/companion_libs/gmp.in"
 endif
 if MPFR
 source "config/companion_libs/mpfr.in"
-endif
-if PPL
-source "config/companion_libs/ppl.in"
 endif
 if ISL
 source "config/companion_libs/isl.in"
@@ -182,9 +179,7 @@ config COMPLIBS_CHECK
       
       If you suspect that one (or more) of your companion libraries is the
       cause for incorrectly generated code, you should answer 'Y' here.
-      Note however that this will take a really long time. For example,
-      building PPL on my machine takes roughly 1'40", while checking it takes
-      about 1h40'...
+      Note however that this will take a really long time.
 
 endif # COMPLIBS
 

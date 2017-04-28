@@ -1,10 +1,11 @@
 # CLooG options
+## depends on OBSOLETE
 
+# CLooG 0.18.4 requires ISL 0.12 or newer
+# CLooG 0.18.1/0.18.0 frequires ISL 0.12 or older
 choice
     bool
     prompt "CLooG version"
-
-if ISL
 
 # Don't remove next line
 # CT_INSERT_VERSION_BELOW
@@ -12,28 +13,22 @@ if ISL
 config CLOOG_V_0_18_4
     bool
     prompt "0.18.4"
+    depends on ISL_V_0_12_or_later
     select CLOOG_0_18_4_or_later
 
 config CLOOG_V_0_18_1
     bool
-    prompt "0.18.1"
+    prompt "0.18.1 (OBSOLETE)"
+    depends on !ISL_V_0_14_or_later
+    depends on OBSOLETE
     select CLOOG_0_18_or_later
 
 config CLOOG_V_0_18_0
     bool
-    prompt "0.18.0"
+    prompt "0.18.0 (OBSOLETE)"
+    depends on !ISL_V_0_14_or_later
+    depends on OBSOLETE
     select CLOOG_0_18_or_later
-
-endif # ISL
-
-if PPL
-
-config CLOOG_V_0_15_11
-    bool
-    prompt "0.15.11"
-    select CLOOG_NEEDS_AUTORECONF
-
-endif # PPL
 
 endchoice
 
@@ -44,7 +39,6 @@ config CLOOG_VERSION
     default "0.18.4" if CLOOG_V_0_18_4
     default "0.18.1" if CLOOG_V_0_18_1
     default "0.18.0" if CLOOG_V_0_18_0
-    default "0.15.11" if CLOOG_V_0_15_11
 
 config CLOOG_0_18_4_or_later
     bool

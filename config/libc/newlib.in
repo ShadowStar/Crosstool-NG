@@ -12,6 +12,41 @@
 ## help is only available in source form. It can be compiled for a wide
 ## help array of processors, and will usually work on any architecture with
 ## help the addition of a few low-level routines.
+#
+config LIBC_NEWLIB_CUSTOM
+    bool
+    prompt "Custom newlib"
+    depends on EXPERIMENTAL
+    select LIBC_NEWLIB_2_5_or_later
+    help
+      The choosen newlib version shall be not downloaded. Instead use
+      a custom location to get the source.
+
+if LIBC_NEWLIB_CUSTOM
+
+config LIBC_NEWLIB_CUSTOM_LOCATION
+    string
+    prompt "Full path to custom newlib source"
+    help
+      Enter the path to the directory or tarball of your source for newlib.
+
+      If the path is a tarball, it should extract to: <name>-<version>/
+      where the name is this component, newlib, and the version is set
+      below in the custom version string.
+
+config LIBC_NEWLIB_CUSTOM_VERSION
+    string
+    prompt "Custom NEWLIB version"
+    help
+      Enter the version number for your custom newlib.
+
+config LIBC_VERSION
+    string
+    default LIBC_NEWLIB_CUSTOM_VERSION
+
+endif # LIBC_NEWLIB_CUSTOM
+
+if ! LIBC_NEWLIB_CUSTOM
 
 config CC_NEWLIB_SHOW_LINARO
     bool
@@ -19,15 +54,15 @@ config CC_NEWLIB_SHOW_LINARO
     help
       Linaro is maintaining some advanced/more stable/experimental versions
       of newlib, especially for the ARM architecture.
-      
+
       Those versions have not been blessed by the newlib comunity (nor have they
       been cursed either!), but they look to be pretty much stable, and even
       more stable than the upstream versions. YMMV...
-      
+
       If you do not know what this Linaro stuff is, then simply say 'n' here,
       and rest in peace. OTOH, if you know what you are doing, you will be
       able to use and enjoy :-) the Linaro versions by saying 'y' here.
-      
+
       Linaro: http://www.linaro.org/
 
 choice
@@ -35,21 +70,35 @@ choice
     prompt "newlib version"
 # Don't remove next line
 # CT_INSERT_VERSION_BELOW
+config LIBC_NEWLIB_V_2_5_0
+    bool
+    prompt "2.5.0.20170323"
+    select LIBC_NEWLIB_2_5
+
+config LIBC_NEWLIB_V_2_4_0
+    bool
+    prompt "2.4.0.20161025"
+    select LIBC_NEWLIB_2_4
+
+config LIBC_NEWLIB_V_2_3_0
+    bool
+    prompt "2.3.0.20160226"
+    select LIBC_NEWLIB_2_3
 
 config LIBC_NEWLIB_LINARO_V_2_2_0
     bool
-    prompt "linaro-2.2.0-2015.01"
+    prompt "Linaro 2.2.0-2015.01"
     depends on CC_NEWLIB_SHOW_LINARO
     select LIBC_NEWLIB_2_2
 
 config LIBC_NEWLIB_V_2_2_0
     bool
-    prompt "2.2.0"
+    prompt "2.2.0.20151023"
     select LIBC_NEWLIB_2_2
 
 config LIBC_NEWLIB_LINARO_V_2_1_0
     bool
-    prompt "linaro-2.1.0-2014.09"
+    prompt "Linaro 2.1.0-2014.09"
     depends on CC_NEWLIB_SHOW_LINARO
     select LIBC_NEWLIB_2_1
 
@@ -60,7 +109,7 @@ config LIBC_NEWLIB_V_2_1_0
 
 config LIBC_NEWLIB_LINARO_V_2_0_0
     bool
-    prompt "linaro-2.0.0-2013.11"
+    prompt "Linaro 2.0.0-2013.11"
     depends on CC_NEWLIB_SHOW_LINARO
 
 config LIBC_NEWLIB_V_2_0_0
@@ -86,13 +135,19 @@ config LIBC_NEWLIB_V_1_17_0
 
 endchoice
 
-config LIBC_NEWLIB_CUSTOM
+endif # ! LIBC_NEWLIB_CUSTOM
+
+config LIBC_NEWLIB_2_5
     bool
-    prompt "Custom newlib"
-    depends on EXPERIMENTAL
-    help
-    The choosen library version shall be not downloaded. Instead use
-    a custom location to get the source.
+    select LIBC_NEWLIB_2_5_or_later
+
+config LIBC_NEWLIB_2_4
+    bool
+    select LIBC_NEWLIB_2_4_or_later
+
+config LIBC_NEWLIB_2_3
+    bool
+    select LIBC_NEWLIB_2_3_or_later
 
 config LIBC_NEWLIB_2_2
     bool
@@ -105,6 +160,18 @@ config LIBC_NEWLIB_2_1
 config LIBC_NEWLIB_2_0
     bool
     select LIBC_NEWLIB_2_0_or_later
+
+config LIBC_NEWLIB_2_5_or_later
+    bool
+    select LIBC_NEWLIB_2_4_or_later
+
+config LIBC_NEWLIB_2_4_or_later
+    bool
+    select LIBC_NEWLIB_2_3_or_later
+
+config LIBC_NEWLIB_2_3_or_later
+    bool
+    select LIBC_NEWLIB_2_2_or_later
 
 config LIBC_NEWLIB_2_2_or_later
     bool
@@ -120,24 +187,16 @@ config LIBC_NEWLIB_2_0_or_later
     bool
     select LIBC_PROVIDES_CXA_ATEXIT
 
-if LIBC_NEWLIB_CUSTOM
-
-config LIBC_NEWLIB_CUSTOM_LOCATION
-    string
-    prompt "Full path to custom newlib source"
-    default ""
-    help
-      Enter the path to the directory (or tarball) of your source for newlib,
-      or leave blank to use default CT_CUSTOM_LOCATION_ROOT_DIR/newlib
-
-endif # LIBC_NEWLIB_CUSTOM
-
+if ! LIBC_NEWLIB_CUSTOM
 config LIBC_VERSION
     string
 # Don't remove next line
 # CT_INSERT_VERSION_STRING_BELOW
+    default "2.5.0.20170323" if LIBC_NEWLIB_V_2_5_0
+    default "2.4.0.20161025" if LIBC_NEWLIB_V_2_4_0
+    default "2.3.0.20160226" if LIBC_NEWLIB_V_2_3_0
     default "linaro-2.2.0-2015.01" if LIBC_NEWLIB_LINARO_V_2_2_0
-    default "2.2.0" if LIBC_NEWLIB_V_2_2_0
+    default "2.2.0.20151023" if LIBC_NEWLIB_V_2_2_0
     default "linaro-2.1.0-2014.09" if LIBC_NEWLIB_LINARO_V_2_1_0
     default "2.1.0" if LIBC_NEWLIB_V_2_1_0
     default "linaro-2.0.0-2013.11" if LIBC_NEWLIB_LINARO_V_2_0_0
@@ -150,6 +209,8 @@ config LIBC_VERSION
       Enter the tag you want to use.
       Leave empty to use the 'head' of the repository.
 
+endif # ! LIBC_NEWLIB_CUSTOM
+
 config LIBC_NEWLIB_TARGET_CFLAGS
     string
     prompt "Target CFLAGS for newlib"
@@ -161,5 +222,5 @@ config LIBC_NEWLIB_TARGET_CFLAGS
       gcc target libraries.
       Note:  Both TARGET_CFLAGS and LIBC_NEWLIB_TARGET_CFLAGS are used
              to compile the libraries.
- 
+
       Leave blank if you don't know better.

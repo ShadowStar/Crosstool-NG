@@ -37,15 +37,15 @@ config CC_GCC_EXTRA_CONFIG_ARRAY
       if they are properly quoted (or escaped, but prefer quotes). Eg.:
           --with-foo="1st arg with 4 spaces" --with-bar=2nd-arg-without-space
 
-config CC_GCC_EXTRA_ENV_ARRAY
+config CC_GCC_MULTILIB_LIST
     string
-    prompt "Extra env variables to set for make"
-    default ""
+    prompt "List of multilib variants"
+    depends on MULTILIB
     help
-      Used to add specific env variables on the make command line for the
-      gcc build (eg. INHIBIT_LIBC_CFLAGS='-DUSE_TM_CLONE_REGISTRY=0')
-
-      Leave blank if you don't know better.
+      Architecture-specific option of expanding or restricting the list of
+      the multilib variants to be built. Refer to GCC installation manual
+      for the format of this option for a particular architecture.
+      Leave empty to use the default list for this architecture.
 
 config CC_GCC_TARGET_FINAL
     bool
@@ -59,16 +59,18 @@ config CC_GCC_TARGET_FINAL
       tricks are not done and the compiler is build with all/install.
 
 config STATIC_TOOLCHAIN
-    select CC_GCC_STATIC_LIBSTDCXX if CC_GCC_4_4_or_later
+    bool
+    select CC_GCC_STATIC_LIBSTDCXX
 
 config CC_GCC_STATIC_LIBSTDCXX
     bool
     prompt "Link libstdc++ statically into the gcc binary"
     default y
-    depends on CC_GCC_4_4_or_later
-    select WANTS_STATIC_LINK
+    depends on CONFIGURE_has_static_link || CANADIAN || CROSS_NATIVE
+    select WANTS_STATIC_LINK if CROSS || NATIVE
+    select WANTS_STATIC_LINK_CXX if CROSS || NATIVE
     help
-      Newer gcc versions use the PPL library which is C++ code.  Statically
+      Newer gcc versions require some c++ libraries. So statically
       linking libstdc++ increases the likeliness that the gcc binary will
       run on machines other than the one which it was built on, without
       having to worry about distributing the matching version of libstdc++
@@ -80,11 +82,33 @@ config CC_GCC_SYSTEM_ZLIB
     help
       Do not use bundled zlib, and use the zlib already available for
       the host (eg. the system library).
+
+      If zlib is built as a companion library, selecting this option
+      will use it.
       
       If you want to build a static toolchain, you will need to also
       install the static version of zlib for your host.
       
       If unsure, say 'n'.
+
+config CC_GCC_CONFIG_TLS
+    tristate
+    prompt "Configure TLS (Thread Local Storage)"
+    default m
+    help
+      Specify that the target supports TLS (Thread Local Storage). Usually
+      configure can correctly determine if TLS is supported. In cases where
+      it guesses incorrectly, TLS can be explicitly enabled or disabled.
+      This can happen if the assembler supports TLS but the C library does
+      not, or if the assumptions made by the configure test are incorrect.
+
+       Option  | TLS use            | Associated ./configure switch
+      ---------+--------------------+--------------------------------
+         Y     | forcibly used      | --enable-tls
+         M     | auto               | (none, ./configure decides)
+         N     | forcibly not used  | --disable-tls
+      
+      If unsure, say 'M'.
 
 #-----------------------------------------------------------------------------
 # Optimisation features
@@ -92,8 +116,22 @@ config CC_GCC_SYSTEM_ZLIB
 comment "Optimisation features"
 
 # Defined in config/cc/gcc.in
+# For graphite: gcc needs cloog and isl
+# In >= gcc-5.x, cloog is no longer needed, but isl is.
+# Prompt in config/cc/gcc.in.2
 config CC_GCC_USE_GRAPHITE
-    prompt "Enable GRAPHITE loop optimisations"
+    bool "Enable GRAPHITE loop optimisations"
+    default y
+    select CLOOG_NEEDED if !CC_GCC_5_or_later
+    select ISL_NEEDED
+    help
+      Enable the GRAPHITE loop optimsations.
+      
+      On some systems (eg. Cygwin), CLooG and ISL (required to enable
+      GRAPHITE) may not build properly (yet), so you'll have to say 'N'
+      here (or help debug the issues)
+
+      TODO: Is this still true on Cygwin?
 
 # The way LTO works is a bit twisted.
 # See: http://gcc.gnu.org/wiki/LinkTimeOptimization#Requirements
@@ -103,11 +141,12 @@ config CC_GCC_USE_GRAPHITE
 #   - if binutils does not have plugins: LTO is handled by collect2
 # In any case, LTO support does not depend on plugins, but takes
 # advantage of it
-# Also, only the 4.5 series needs libelf for LTO; 4.6 has dropped
-# the dependency.
-# Defined in config/cc/gcc.in
 config CC_GCC_USE_LTO
-    prompt "Enable LTO"
+    bool "Enable LTO"
+    default y
+    depends on ! STATIC_TOOLCHAIN
+    help
+      Enable the Link Time Optimisations.
 
 #-----------------------------------------------------------------------------
 comment "Settings for libraries running on target"
@@ -137,12 +176,15 @@ config CC_GCC_LIBMUDFLAP
 config CC_GCC_LIBGOMP
     bool
     prompt "Compile libgomp"
+    depends on !THREADS_NONE
     help
       libgomp is "the GNU implementation of the OpenMP Application Programming
       Interface (API) for multi-platform shared-memory parallel programming in
       C/C++ and Fortran". See:
         http://gcc.gnu.org/onlinedocs/libgomp/
-      
+
+      GNU OpenMP support requires threading.
+
       The default is 'N'. Say 'Y' if you need it, and report success/failure.
 
 config CC_GCC_LIBSSP
@@ -156,7 +198,6 @@ config CC_GCC_LIBSSP
 config CC_GCC_LIBQUADMATH
     bool
     prompt "Compile libquadmath"
-    depends on CC_GCC_HAS_LIBQUADMATH
     help
       libquadmath is a library which provides quad-precision mathematical
       functions on targets supporting the __float128 datatype. See:
@@ -167,7 +208,6 @@ config CC_GCC_LIBQUADMATH
 config CC_GCC_LIBSANITIZER
     bool
     prompt "Compile libsanitizer"
-    depends on CC_GCC_HAS_LIBSANITIZER
     depends on THREADS_NATIVE
     depends on ! LIBC_uClibc && ! LIBC_musl # Currently lacks required headers (like netrom.h)
     help
@@ -177,6 +217,17 @@ config CC_GCC_LIBSANITIZER
         - racy data accesses (in multi-threaded programs)
 
       The default is 'N'. Say 'Y' if you need it, and report success/failure.
+
+config CC_GCC_LIBMPX
+    bool
+    default y
+    prompt "Compile libmpx"
+    depends on CC_GCC_HAS_LIBMPX
+    depends on ARCH_x86
+    # MUSL does not define libc types that GCC requires. Mingw lacks certain headers.
+    depends on !LIBC_musl && ! LIBC_mingw
+    help
+      Enable GCC support for Intel Memory Protection Extensions (MPX).
 
 #-----------------------------------------------------------------------------
 
@@ -229,7 +280,6 @@ config CC_GCC_LDBL_128
     tristate
     prompt "Enable 128-bit long doubles"
     default m
-    depends on CC_GCC_4_2_or_later
     help
       Saying 'Y' will force gcc to use 128-bit wide long doubles
       Saying 'N' will force gcc to use 64-bit wide long doubles
@@ -241,7 +291,6 @@ config CC_GCC_LDBL_128
 config CC_GCC_BUILD_ID
     bool
     prompt "Enable build-id"
-    depends on CC_GCC_HAS_BUILD_ID
     help
       Tells GCC to pass --build-id option to the linker for all final
       links (links performed without the -r or --relocatable option),
@@ -254,7 +303,6 @@ config CC_GCC_BUILD_ID
 choice CC_GCC_LNK_HASH_STYLE_CHOICE
     bool
     prompt "linker hash style"
-    depends on CC_GCC_HAS_LNK_HASH_STYLE
     depends on BINUTILS_HAS_HASH_STYLE
 
 config CC_GCC_LNK_HASH_STYLE_DEFAULT

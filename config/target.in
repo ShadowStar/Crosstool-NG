@@ -5,41 +5,6 @@ menu "Target options"
 config ARCH
     string
 
-# Pre-declare target optimisation variables
-config ARCH_SUPPORTS_BOTH_MMU
-config ARCH_SUPPORTS_BOTH_ENDIAN
-config ARCH_SUPPORTS_8
-config ARCH_SUPPORTS_32
-config ARCH_SUPPORTS_64
-config ARCH_SUPPORTS_WITH_ARCH
-config ARCH_SUPPORTS_WITH_ABI
-config ARCH_SUPPORTS_WITH_CPU
-config ARCH_SUPPORTS_WITH_TUNE
-config ARCH_SUPPORTS_WITH_FLOAT
-config ARCH_SUPPORTS_WITH_FPU
-config ARCH_SUPPORTS_SOFTFP
-
-config ARCH_DEFAULT_HAS_MMU
-config ARCH_DEFAULT_BE
-config ARCH_DEFAULT_LE
-config ARCH_DEFAULT_32
-config ARCH_DEFAULT_64
-
-config ARCH_ARCH
-config ARCH_ABI
-config ARCH_CPU
-config ARCH_TUNE
-config ARCH_FPU
-config ARCH_BE
-config ARCH_LE
-config ARCH_32
-config ARCH_64
-config ARCH_BITNESS
-config ARCH_FLOAT_HW
-config ARCH_FLOAT_SW
-config TARGET_CFLAGS
-config TARGET_LDFLAGS
-
 source "config.gen/arch.in"
 
 config ARCH_SUFFIX
@@ -65,6 +30,9 @@ config ARCH_REQUIRES_MULTILIB
     bool
     select MULTILIB
 
+# Multilib requires 1st core pass (i.e., pass without building libgcc)
+# to determine which target cflags vary with multilib and which must be
+# passed from the arch configuration.
 config MULTILIB
     bool
     prompt "Build a multilib toolchain (READ HELP!!!)"
@@ -81,6 +49,29 @@ config MULTILIB
       
       NOTE: The multilib feature in crosstool-NG is not well-tested.
             Use at your own risk, and report success and/or failure.
+
+config DEMULTILIB
+    bool "Attempt to combine libraries into a single directory"
+    default y if !MULTILIB
+    depends on !MULTILIB || EXPERIMENTAL
+    help
+      Normally, Crosstool-NG installs the libraries into the directories
+      as the configure for these libraries determines appropriate. For
+      example, for AArch64 glibc wants to install the libraries into
+      /lib64 but the default dynamic linker path is /lib/ld-linux-aarch64.so.1
+      (which is installed as a symlink to ../lib64/ld-VER.so).
+
+      However, not all consumers of the toolchain can handle the libraries
+      residing in multiple directories. To appease them, crosstool-NG can
+      attempt to combine the libraries back into a single /lib directory and
+      create all other directories as symlinks to /lib. This requires all
+      the library names to be unique within each sysroot.
+
+      Note that GCC may also use separate sysroots for different multilibs.
+      Hence it may make sense to enable this option even for multilib toolchains.
+      However, separate roots are rare (any other architecture aside from
+      SuperH using them?) and hence not well tested in crosstool-NG; therefore,
+      this option is experimental when MULTILIB is enabled.
 
 #--------------------------------------
 config ARCH_SUPPORTS_BOTH_MMU

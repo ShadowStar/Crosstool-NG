@@ -3,6 +3,8 @@
 CT_DoArchTupleValues() {
     # The architecture part of the tuple:
     CT_TARGET_ARCH="${CT_ARCH}${CT_ARCH_SUFFIX}"
+    CT_ARCH_ENDIAN_CFLAG=""
+    CT_ARCH_ENDIAN_LDFLAG=""
     # The system part of the tuple:
     case "${CT_LIBC}" in
         *glibc)   CT_TARGET_SYS=gnu;;
@@ -22,13 +24,7 @@ CT_ConfigureXtensa() {
         custom_overlay="xtensa-overlay.tar"
     fi
 
-    if [ -n "${CT_CUSTOM_LOCATION_ROOT_DIR}" \
-         -a -z "${custom_location}" ]; then
-             custom_location="${CT_CUSTOM_LOCATION_ROOT_DIR}"
-    fi
-
-    CT_TestAndAbort "${custom_overlay}: CT_CUSTOM_LOCATION_ROOT_DIR or CT_ARCH_XTENSA_CUSTOM_OVERLAY_LOCATION must be set." \
-        -z "${CT_CUSTOM_LOCATION_ROOT_DIR}" -a -z "${custom_location}"
+    CT_TestAndAbort "${custom_overlay}: CT_ARCH_XTENSA_CUSTOM_OVERLAY_LOCATION must be set." -z "${custom_location}"
 
     local full_file="${custom_location}/${custom_overlay}"
     local basename="${component}-${version}"
@@ -75,4 +71,10 @@ CT_ConfigureXtensa() {
     CT_DoExecLog DEBUG rm -f "${CT_SRC_DIR}/.${basename}.configuring"
 
     CT_Popd
+}
+
+CT_DoArchUClibcConfig() {
+    local cfg="${1}"
+
+    CT_DoArchUClibcSelectArch "${cfg}" "xtensa"
 }

@@ -32,6 +32,10 @@ config LIBC_SUPPORT_THREADS_LT
     bool
     select LIBC_SUPPORT_THREADS_ANY
 
+config LIBC_SUPPORT_THREADS_POSIX
+    bool
+    select LIBC_SUPPORT_THREADS_ANY
+
 config LIBC_SUPPORT_THREADS_NONE
     bool
 
@@ -51,8 +55,9 @@ choice
     bool
     prompt "Threading implementation to use:"
     default THREADS_NATIVE         if LIBC_SUPPORT_THREADS_NATIVE
-    default THREADS_THREADS_LT     if LIBC_SUPPORT_THREADS_LT && ! LIBC_SUPPORT_THREADS_NATIVE
-    default THREADS_NONE           if ! LIBC_SUPPORT_THREADS_ANY
+    default THREADS_LT             if LIBC_SUPPORT_THREADS_LT
+    default THREADS_POSIX          if LIBC_SUPPORT_THREADS_POSIX
+    default THREADS_NONE
 
 config THREADS_NATIVE
     bool
@@ -70,12 +75,37 @@ config THREADS_LT
     prompt "linuxthreads"
     depends on LIBC_SUPPORT_THREADS_LT
 
+config THREADS_POSIX
+    bool
+    prompt "posix"
+    depends on LIBC_SUPPORT_THREADS_POSIX
+
 config THREADS_NONE
     bool
     prompt "none"
     depends on LIBC_SUPPORT_THREADS_NONE
 
 endchoice
+
+config CREATE_LDSO_CONF
+    bool "Create /etc/ld.so.conf file"
+    depends on SHARED_LIBS
+    default y if MULTILIB
+    help
+      Create /etc/ld.so.conf file in the sysroot directory for the
+      target.
+
+      Note that Buildroot errors out if it sees /etc/ld.so.conf.
+
+config LDSO_CONF_EXTRA_DIRS_ARRAY
+    string "Extra directories to add to /etc/ld.so.conf"
+    depends on CREATE_LDSO_CONF
+    help
+      Extra directories to include in /etc/ld.so.conf. The directories
+      will be augmented per compiler's multilib specification,
+      if applicable. For example, if the compiler's multilibs include
+      /lib and /lib64, and you specify /usr/local/lib here, ld.so.conf
+      will have both /usr/local/lib and /usr/local/lib64.
 
 config LIBC_XLDD
     bool

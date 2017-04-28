@@ -1,7 +1,8 @@
 conf
 ?conf
-**.o
-**.dep
+*.o
+*.dep
 zconf.lex.c
 zconf.hash.c
 zconf.tab.c
+*.exe

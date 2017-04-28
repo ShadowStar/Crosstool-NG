@@ -2,54 +2,100 @@
 # Copyright 2007 Yann E. MORIN
 # Licensed under the GPL v2. See COPYING in the root of this package
 
-# Extract the C library tarball(s)
+do_libc_get() {
+    local date
+    local version
+    local -a addons_list
+
+    addons_list=($(do_libc_add_ons_list " "))
+
+    # Main source
+    if [ "${CT_LIBC_GLIBC_CUSTOM}" = "y" ]; then
+        CT_GetCustom "glibc" "${CT_LIBC_GLIBC_CUSTOM_VERSION}" \
+            "${CT_LIBC_GLIBC_CUSTOM_LOCATION}"
+    else
+        case "${CT_LIBC_VERSION}" in
+            linaro-*)
+                CT_GetLinaro "glibc" "${CT_LIBC_VERSION}"
+                ;;
+            *)
+                CT_GetFile "glibc-${CT_LIBC_VERSION}"                                        \
+                           {http,ftp,https}://ftp.gnu.org/gnu/glibc                          \
+                           ftp://{sourceware.org,gcc.gnu.org}/pub/glibc/{releases,snapshots}
+                ;;
+	esac
+    fi
+
+    # C library addons
+    for addon in "${addons_list[@]}"; do
+        # Never ever try to download these add-ons,
+        # they've always been internal
+        case "${addon}" in
+            nptl)   continue;;
+        esac
+
+        case "${addon}:${CT_LIBC_GLIBC_PORTS_EXTERNAL}" in
+            ports:y)    ;;
+            ports:*)    continue;;
+        esac
+
+        if ! CT_GetFile "glibc-${addon}-${CT_LIBC_VERSION}"                      \
+               http://mirrors.kernel.org/sourceware/glibc                        \
+               {http,ftp,https}://ftp.gnu.org/gnu/glibc                          \
+               ftp://{sourceware.org,gcc.gnu.org}/pub/glibc/{releases,snapshots}
+        then
+            # Some add-ons are bundled with glibc, others are
+            # bundled in their own tarball. Eg. NPTL is internal,
+            # while LinuxThreads was external. Also, for old
+            # versions of glibc, the libidn add-on was external,
+            # but with version >=2.10, it is internal.
+            CT_DoLog DEBUG "Addon '${addon}' could not be downloaded."
+            CT_DoLog DEBUG "We'll see later if we can find it in the source tree"
+        fi
+    done
+
+    return 0
+}
+
 do_libc_extract() {
     local addon
 
-    # Attempt CT_EXTRACT only if NOT custom, or CUSTOM_LOCATION is not a directory
-    if [ "${CT_LIBC_CUSTOM}" != "y" \
-         -o ! -d "${CT_LIBC_CUSTOM_LOCATION}" ]; then
-        CT_Extract "${CT_LIBC}-${CT_LIBC_VERSION}"
-    fi
+    CT_Extract "${CT_LIBC}-${CT_LIBC_VERSION}"
     CT_Pushd "${CT_SRC_DIR}/${CT_LIBC}-${CT_LIBC_VERSION}"
-    # Attempt CT_PATCH only if NOT custom
-    if [ "${CT_LIBC_CUSTOM}" != "y" ]; then
-        CT_Patch nochdir "${CT_LIBC}" "${CT_LIBC_VERSION}"
-    fi
+    # Custom glibc won't get patched, because CT_GetCustom
+    # marks custom glibc as patched.
+    CT_Patch nochdir "${CT_LIBC}" "${CT_LIBC_VERSION}"
 
-    # Extract the add-opns if => 2.17
-    if [ "${CT_LIBC_GLIBC_2_17_or_later}" != "y" ]; then
-        for addon in $(do_libc_add_ons_list " "); do
-            # If the addon was bundled with the main archive, we do not
-            # need to extract it. Worse, if we were to try to extract
-            # it, we'd get an error.
-            if [ -d "${addon}" ]; then
-                CT_DoLog DEBUG "Add-on '${addon}' already present, skipping extraction"
-                continue
-            fi
+    for addon in $(do_libc_add_ons_list " "); do
+        # If the addon was bundled with the main archive, we do not
+        # need to extract it. Worse, if we were to try to extract
+        # it, we'd get an error.
+        if [ -d "${addon}" ]; then
+            CT_DoLog DEBUG "Add-on '${addon}' already present, skipping extraction"
+            continue
+        fi
 
-            CT_Extract nochdir "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}"
+        CT_Extract nochdir "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}"
 
-            CT_TestAndAbort "Error in add-on '${addon}': both short and long names in tarball" \
-                -d "${addon}" -a -d "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}"
+        CT_TestAndAbort "Error in add-on '${addon}': both short and long names in tarball" \
+            -d "${addon}" -a -d "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}"
 
-            # Some addons have the 'long' name, while others have the
-            # 'short' name, but patches are non-uniformly built with
-            # either the 'long' or 'short' name, whatever the addons name
-            # but we prefer the 'short' name and avoid duplicates.
-            if [ -d "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}" ]; then
-                CT_DoExecLog FILE mv "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}" "${addon}"
-            fi
+        # Some addons have the 'long' name, while others have the
+        # 'short' name, but patches are non-uniformly built with
+        # either the 'long' or 'short' name, whatever the addons name
+        # but we prefer the 'short' name and avoid duplicates.
+        if [ -d "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}" ]; then
+            CT_DoExecLog FILE mv "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}" "${addon}"
+        fi
 
-            CT_DoExecLog FILE ln -s "${addon}" "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}"
+        CT_DoExecLog FILE ln -s "${addon}" "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}"
 
-            CT_Patch nochdir "${CT_LIBC}" "${addon}-${CT_LIBC_VERSION}"
+        CT_Patch nochdir "${CT_LIBC}" "${addon}-${CT_LIBC_VERSION}"
 
-            # Remove the long name since it can confuse configure scripts to run
-            # the same source twice.
-            rm "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}"
-        done
-    fi
+        # Remove the long name since it can confuse configure scripts to run
+        # the same source twice.
+        rm "${CT_LIBC}-${addon}-${CT_LIBC_VERSION}"
+    done
 
     # The configure files may be older than the configure.in files
     # if using a snapshot (or even some tarballs). Fake them being
@@ -57,10 +103,6 @@ do_libc_extract() {
     find . -type f -name configure -exec touch {} \; 2>&1 |CT_DoLog ALL
 
     CT_Popd
-
-    if [ "${CT_LIBC_LOCALES}" = "y" ]; then
-        do_libc_locales_extract
-    fi
 }
 
 # Build and install headers and start files
@@ -75,6 +117,10 @@ do_libc() {
     do_libc_backend libc_mode=final
 }
 
+do_libc_post_cc() {
+    :
+}
+
 # This backend builds the C library once for each multilib
 # variant the compiler gives us
 # Usage: do_libc_backend param=value [...]
@@ -82,13 +128,6 @@ do_libc() {
 #   libc_mode           : 'startfiles' or 'final'               : string    : (none)
 do_libc_backend() {
     local libc_mode
-    local -a multilibs
-    local multilib
-    local multi_dir
-    local multi_flags
-    local extra_dir
-    local libc_headers libc_startfiles libc_full
-    local hdr
     local arg
 
     for arg in "$@"; do
@@ -98,136 +137,78 @@ do_libc_backend() {
     case "${libc_mode}" in
         startfiles)
             CT_DoStep INFO "Installing C library headers & start files"
-            hdr=y
-            libc_startfiles=y
-            libc_full=
             ;;
         final)
             CT_DoStep INFO "Installing C library"
-            hdr=
-            libc_startfiles=
-            libc_full=y
             ;;
-        *)  CT_Abort "Unsupported (or unset) libc_mode='${libc_mode}'";;
+        *)
+            CT_Abort "Unsupported (or unset) libc_mode='${libc_mode}'"
+            ;;
     esac
 
-    # If gcc is not configured for multilib, it still prints
-    # a single line for the default settings
-    multilibs=( $("${CT_TARGET}-gcc" -print-multi-lib 2>/dev/null) )
-    for multilib in "${multilibs[@]}"; do
-        multi_dir="${multilib%%;*}"
-        if [ "${multi_dir}" != "." ]; then
-            CT_DoStep INFO "Building for multilib subdir='${multi_dir}'"
-
-            extra_flags="$( echo "${multilib#*;}"       \
-                            |${sed} -r -e 's/@/ -/g;'   \
-                          )"
-            extra_dir="/${multi_dir}"
-
-            # glibc install its files in ${extra_dir}/{usr/,}lib
-            # while gcc expects them in {,usr/}lib/${extra_dir}.
-            # Prepare some symlinks so glibc installs in fact in
-            # the proper place
-            # We do it in the start-files step, so it is not needed
-            # to do it in the final step, as the symlinks will
-            # already exist
-            if [ "${libc_mode}" = "startfiles" ]; then
-                CT_Pushd "${CT_SYSROOT_DIR}"
-                CT_DoExecLog ALL mkdir -p "lib/${multi_dir}"        \
-                                          "usr/lib/${multi_dir}"    \
-                                          "${multi_dir}"            \
-                                          "${multi_dir}/usr"
-                CT_DoExecLog ALL ln -sf "../lib/${multi_dir}" "${multi_dir}/lib"
-                CT_DoExecLog ALL ln -sf "../../usr/lib/${multi_dir}" "${multi_dir}/usr/lib"
-                CT_Popd
-            fi
-            libc_headers=
-        else
-            extra_dir=
-            extra_flags=
-            libc_headers="${hdr}"
-        fi
-
-        CT_mkdir_pushd "${CT_BUILD_DIR}/build-libc-${libc_mode}${extra_dir//\//_}"
-
-        do_libc_backend_once extra_dir="${extra_dir}"               \
-                             extra_flags="${extra_flags}"           \
-                             libc_headers="${libc_headers}"         \
-                             libc_startfiles="${libc_startfiles}"   \
-                             libc_full="${libc_full}"
-
-        CT_Popd
-
-        if [ "${multi_dir}" != "." ]; then
-            if [ "${libc_mode}" = "final" ]; then
-                CT_DoLog EXTRA "Fixing up multilib location"
-
-                # rewrite the library multiplexers
-                for d in "lib/${multi_dir}" "usr/lib/${multi_dir}"; do
-                    for l in libc libpthread libgcc_s; do
-                        if [    -f "${CT_SYSROOT_DIR}/${d}/${l}.so"    \
-                             -a ! -L ${CT_SYSROOT_DIR}/${d}/${l}.so    ]
-                        then
-                            CT_DoExecLog DEBUG ${sed} -r -i                                 \
-                                                      -e "s:/lib/:/lib/${multi_dir}/:g;"    \
-                                                      "${CT_SYSROOT_DIR}/${d}/${l}.so"
-                        fi
-                    done
-                done
-                # Remove the multi_dir now it is no longer useful
-                CT_DoExecLog DEBUG rm -rf "${CT_SYSROOT_DIR}/${multi_dir}"
-            fi # libc_mode == final
-
-            CT_EndStep
-        fi
-    done
-
+    CT_mkdir_pushd "${CT_BUILD_DIR}/build-libc-${libc_mode}"
+    CT_IterateMultilibs do_libc_backend_once multilib libc_mode="${libc_mode}"
+    CT_Popd
     CT_EndStep
 }
 
 # This backend builds the C library once
 # Usage: do_libc_backend_once param=value [...]
-#   Parameter           : Definition                            : Type      : Default
-#   libc_headers        : Build libc headers                    : bool      : n
-#   libc_startfiles     : Build libc start-files                : bool      : n
-#   libc_full           : Build full libc                       : bool      : n
-#   extra_flags         : Extra CFLAGS to use (for multilib)    : string    : (empty)
-#   extra_dir           : Extra subdir for multilib             : string    : (empty)
+#   Parameter           : Definition                            : Type
+#   libc_mode           : 'startfiles' or 'final'               : string    : (empty)
+#   multi_*             : as defined in CT_IterateMultilibs     : (varies)  :
 do_libc_backend_once() {
-    local libc_headers
-    local libc_startfiles
-    local libc_full
-    local extra_flags
-    local extra_dir
+    local multi_flags multi_dir multi_os_dir multi_root multi_index multi_count multi_target
+    local build_cflags build_cppflags build_ldflags
+    local startfiles_dir
     local src_dir="${CT_SRC_DIR}/${CT_LIBC}-${CT_LIBC_VERSION}"
-    local extra_cc_args
     local -a extra_config
     local -a extra_make_args
     local glibc_cflags
-    local float_extra
-    local endian_extra
-    local arg
+    local arg opt
 
     for arg in "$@"; do
         eval "${arg// /\\ }"
     done
 
+    CT_DoStep INFO "Building for multilib ${multi_index}/${multi_count}: '${multi_flags}'"
+
+    # Ensure sysroot (with suffix, if applicable) exists
+    CT_DoExecLog ALL mkdir -p "${multi_root}"
+
+    # Adjust target tuple according GLIBC quirks
+    CT_DoArchGlibcAdjustTuple multi_target
+
+    # Glibc seems to be smart enough to know about the cases that can coexist
+    # in the same root and installs them into proper multilib-os directory; all
+    # we need is to point to the right root. We do need to handle multilib-os
+    # here, though, for the first pass where we install crt*.o and a dummy
+    # libc.so; we therefore install it to the most specific location of
+    # <sysroot>/<suffix>/usr/lib/<multilib-os> where it is least likely to clash
+    # with other multilib variants. We then remove these temporary files at
+    # the beginning of the libc-final step and allow glibc to install them
+    # where it thinks is proper.
+    startfiles_dir="${multi_root}/usr/lib/${multi_os_dir}"
+    CT_SanitizeVarDir startfiles_dir
+
+    if [ "${libc_mode}" = "final" ]; then
+        CT_DoLog EXTRA "Cleaning up start files"
+        CT_DoExecLog ALL rm -f "${startfiles_dir}/crt1.o" \
+            "${startfiles_dir}/crti.o" \
+            "${startfiles_dir}/crtn.o" \
+            "${startfiles_dir}/libc.so"
+    fi
+
     CT_DoLog EXTRA "Configuring C library"
 
-    case "${CT_LIBC}" in
-        glibc)
-            # glibc can't be built without -O2 (reference needed!)
-            OPTIMIZE=-O2
-            # Also, if those two are missing, iconv build breaks
-            extra_config+=( --disable-debug --disable-sanity-checks )
-            ;;
-    esac
+    # Also, if those two are missing, iconv build breaks
+    extra_config+=( --disable-debug --disable-sanity-checks )
 
     # always include rpc, the user can still override it with TI-RPC
     extra_config+=( --enable-obsolete-rpc )
 
     # Add some default glibc config options if not given by user.
-    # We don't need to be conditional on wether the user did set different
+    # We don't need to be conditional on whether the user did set different
     # values, as they CT_LIBC_GLIBC_EXTRA_CONFIG_ARRAY is passed after
     # extra_config
 
@@ -249,21 +230,6 @@ do_libc_backend_once() {
         *) extra_config+=("--disable-shared");;
     esac
 
-    float_extra="$( echo "${extra_flags}"       \
-                    |${sed} -r -e '/^(.*[[:space:]])?-m(hard|soft)-float([[:space:]].*)?$/!d;'  \
-                               -e 's//\2/;'     \
-                  )"
-    case "${float_extra}" in
-        hard)   extra_config+=("--with-fp");;
-        soft)   extra_config+=("--without-fp");;
-        "")
-            case "${CT_ARCH_FLOAT}" in
-                hard|softfp)    extra_config+=("--with-fp");;
-                soft)           extra_config+=("--without-fp");;
-            esac
-            ;;
-    esac
-
     if [ "${CT_LIBC_DISABLE_VERSIONING}" = "y" ]; then
         extra_config+=("--disable-versioning")
     fi
@@ -280,25 +246,11 @@ do_libc_backend_once() {
     extra_config+=("--with-pkgversion=${CT_PKGVERSION}")
     [ -n "${CT_TOOLCHAIN_BUGURL}" ] && extra_config+=("--with-bugurl=${CT_TOOLCHAIN_BUGURL}")
 
-    # Extract the endianness options if any
-    # This should cover all possible endianness options
-    # in gcc, but it is prone to bit-rot... :-(
-    endian_extra="$( echo "${extra_flags}"      \
-                     |${sed} -r -e '/^(.*[[:space:]])?-(E[BL]|m((big|little)(-endian)?|e?[bl]))([[:space:]].*)?$/!d;' \
-                                -e 's//\2/;'    \
-                   )"
-    case "${endian_extra}" in
-        EB|mbig-endian|mbig|meb|mb)
-            extra_cc_args="${extra_cc_args} ${endian_extra}"
-            ;;
-        EL|mlittle-endian|mlittle|mel|ml)
-            extra_cc_args="${extra_cc_args} ${endian_extra}"
-            ;;
-        "") extra_cc_args="${extra_cc_args} ${CT_ARCH_ENDIAN_OPT}"
-            ;;
-    esac
-
     touch config.cache
+
+    # Hide host C++ binary from configure
+    echo "ac_cv_prog_ac_ct_CXX=${CT_TARGET}-g++" >>config.cache
+
     if [ "${CT_LIBC_GLIBC_FORCE_UNWIND}" = "y" ]; then
         echo "libc_cv_forced_unwind=yes" >>config.cache
         echo "libc_cv_c_cleanup=yes" >>config.cache
@@ -307,14 +259,30 @@ do_libc_backend_once() {
     # Pre-seed the configparms file with values from the config option
     printf "%s\n" "${CT_LIBC_GLIBC_CONFIGPARMS}" > configparms
 
-    cross_cc=$(CT_Which "${CT_TARGET}-gcc")
-    extra_cc_args+=" ${extra_flags}"
+    # glibc can't be built without -O2 (reference needed!)
+    glibc_cflags+=" -O2"
 
     case "${CT_LIBC_ENABLE_FORTIFIED_BUILD}" in
         y)  ;;
         *)  glibc_cflags+=" -U_FORTIFY_SOURCE";;
     esac
-    glibc_cflags+=" ${CT_TARGET_CFLAGS} ${OPTIMIZE} ${CT_LIBC_GLIBC_EXTRA_CFLAGS}"
+
+    # In the order of increasing precedence. Flags common to compiler and linker.
+    glibc_cflags+=" ${CT_TARGET_CFLAGS}"
+    glibc_cflags+=" ${CT_LIBC_GLIBC_EXTRA_CFLAGS}"
+    glibc_cflags+=" ${multi_flags}"
+
+    # Analyze the resulting options for any extra configure switches to throw in.
+    for opt in ${glibc_cflags}; do
+        case ${opt} in
+            -mhard-float|-mfloat-abi=hard|-mfloat-abi=softfp|-mno-soft-float|-mfpu)
+                extra_config+=("--with-fp")
+                ;;
+            -msoft-float|-mfloat-abi=soft|-mno-float|-mno-fpu)
+                extra_config+=("--without-fp")
+                ;;
+        esac
+    done
 
     # ./configure is mislead by our tools override wrapper for bash
     # so just tell it where the real bash is _on_the_target_!
@@ -329,33 +297,39 @@ do_libc_backend_once() {
     # or even after they get installed...
     echo "ac_cv_path_BASH_SHELL=/bin/bash" >>config.cache
 
+    CT_SymlinkToolsMultilib
+
     # Configure with --prefix the way we want it on the target...
     # There are a whole lot of settings here.  You'll probably want
-    # to read up on what they all mean, and customize a bit, possibly by setting GLIBC_EXTRA_CONFIG_ARRAY
-    # Compare these options with the ones used when installing the glibc headers above - they're different.
-    # Adding "--without-gd" option to avoid error "memusagestat.c:36:16: gd.h: No such file or directory"
+    # to read up on what they all mean, and customize a bit, possibly
+    # by setting GLIBC_EXTRA_CONFIG_ARRAY.
+    # Compare these options with the ones used when installing
+    # the glibc headers above - they're different.
+    # Adding "--without-gd" option to avoid error "memusagestat.c:36:16:
+    # gd.h: No such file or directory"
     # See also http://sources.redhat.com/ml/libc-alpha/2000-07/msg00024.html.
     # Set BUILD_CC, or we won't be able to build datafiles
     # Run explicitly through CONFIG_SHELL, or the build breaks badly (loop-of-death)
     # when the shell is not bash... Sigh... :-(
 
-    CT_DoLog DEBUG "Using gcc for target    : '${cross_cc}'"
-    CT_DoLog DEBUG "Configuring with addons : '$(do_libc_add_ons_list ,)'"
-    CT_DoLog DEBUG "Extra config args passed: '${extra_config[*]}'"
-    CT_DoLog DEBUG "Extra CC args passed    : '${glibc_cflags}'"
-    CT_DoLog DEBUG "Extra flags (multilib)  : '${extra_flags}'"
+    CT_DoLog DEBUG "Configuring with addons  : '$(do_libc_add_ons_list ,)'"
+    CT_DoLog DEBUG "Extra config args passed : '${extra_config[*]}'"
+    CT_DoLog DEBUG "Extra CFLAGS passed      : '${glibc_cflags}'"
+    CT_DoLog DEBUG "Placing startfiles into  : '${startfiles_dir}'"
+    CT_DoLog DEBUG "Configuring with --host  : '${multi_target}'"
 
+    # CFLAGS are only applied when compiling .c files. .S files are compiled with ASFLAGS,
+    # but they are not passed by configure. Thus, pass everything in CC instead.
     CT_DoExecLog CFG                                                \
-    BUILD_CC="${CT_BUILD}-gcc"                                      \
-    CFLAGS="${glibc_cflags}"                                        \
-    CC="${CT_TARGET}-gcc ${CT_LIBC_EXTRA_CC_ARGS} ${extra_cc_args}" \
+    BUILD_CC=${CT_BUILD}-gcc                                        \
+    CC="${CT_TARGET}-${CT_CC} ${glibc_cflags}"                      \
     AR=${CT_TARGET}-ar                                              \
     RANLIB=${CT_TARGET}-ranlib                                      \
     "${CONFIG_SHELL}"                                               \
     "${src_dir}/configure"                                          \
         --prefix=/usr                                               \
         --build=${CT_BUILD}                                         \
-        --host=${CT_TARGET}                                         \
+        --host=${multi_target}                                      \
         --cache-file="$(pwd)/config.cache"                          \
         --without-cvs                                               \
         --disable-profile                                           \
@@ -373,31 +347,38 @@ do_libc_backend_once() {
             ;;
     esac
 
-    CT_CFLAGS_FOR_BUILD+=" ${CT_EXTRA_CFLAGS_FOR_BUILD}"
-    CT_LDFLAGS_FOR_BUILD+=" ${CT_EXTRA_LDFLAGS_FOR_BUILD}"
-    extra_make_args+=( "BUILD_CFLAGS=${CT_CFLAGS_FOR_BUILD}" "BUILD_LDFLAGS=${CT_LDFLAGS_FOR_BUILD}" )
+    build_cflags="${CT_CFLAGS_FOR_BUILD}"
+    build_cppflags=
+    build_ldflags="${CT_LDFLAGS_FOR_BUILD}"
 
     case "$CT_BUILD" in
-        *mingw*|*cygwin*|*msys*)
-            # When installing headers on Cygwin, MSYS2 and MinGW-w64 sunrpc needs
+        *mingw*|*cygwin*|*msys*|*darwin*|*freebsd*)
+            # When installing headers on Cygwin, Darwin, MSYS2 and MinGW-w64 sunrpc needs
             # gettext for building cross-rpcgen.
-            extra_make_args+=( BUILD_CPPFLAGS="-I${CT_BUILDTOOLS_PREFIX_DIR}/include/" )
-            extra_make_args+=( BUILD_LDFLAGS="-L${CT_BUILDTOOLS_PREFIX_DIR}/lib -Wl,-Bstatic -lintl -liconv -Wl,-Bdynamic" )
-            ;;
-        *darwin*)
-            # .. and the same goes for Darwin.
-            extra_make_args+=( BUILD_CPPFLAGS="-I${CT_BUILDTOOLS_PREFIX_DIR}/include/" )
-            extra_make_args+=( BUILD_LDFLAGS="-L${CT_BUILDTOOLS_PREFIX_DIR}/lib -lintl" )
+            build_cppflags="${build_cppflags} -I${CT_BUILDTOOLS_PREFIX_DIR}/include/"
+            build_ldflags="${build_ldflags} -lintl -liconv"
+            case "$CT_BUILD" in
+                *cygwin*|*freebsd*)
+                # Additionally, stat in FreeBSD, Cygwin, and possibly others
+                # is always 64bit, so replace struct stat64 with stat.
+                build_cppflags="${build_cppflags} -Dstat64=stat"
+                ;;
+            esac
             ;;
     esac
 
-    if [ "${libc_headers}" = "y" ]; then
+    extra_make_args+=( "BUILD_CFLAGS=${build_cflags}" )
+    extra_make_args+=( "BUILD_CPPFLAGS=${build_cppflags}" )
+    extra_make_args+=( "BUILD_LDFLAGS=${build_ldflags}" )
+
+    if [ "${libc_mode}" = "startfiles" -a ! -r "${multi_root}/.libc_headers_installed" ]; then
         CT_DoLog EXTRA "Installing C library headers"
+        CT_DoExecLog ALL touch "${multi_root}/.libc_headers_installed"
 
         # use the 'install-headers' makefile target to install the
         # headers
-        CT_DoExecLog ALL ${make} ${JOBSFLAGS}                       \
-                         install_root=${CT_SYSROOT_DIR}${extra_dir} \
+        CT_DoExecLog ALL make ${JOBSFLAGS}                       \
+                         install_root=${multi_root}                 \
                          install-bootstrap-headers=yes              \
                          "${extra_make_args[@]}"                    \
                          install-headers
@@ -438,67 +419,75 @@ do_libc_backend_once() {
                     ;;
             esac
         fi
-    fi # libc_headers == y
+    elif [ "${libc_mode}" = "final" -a -r "${multi_root}/.libc_headers_installed" ]; then
+        CT_DoExecLog ALL rm -f "${multi_root}/.libc_headers_installed"
+    fi # installing headers
 
-    if [ "${libc_startfiles}" = "y" ]; then
+    if [ "${libc_mode}" = "startfiles" ]; then
         if [ "${CT_THREADS}" = "nptl" ]; then
             CT_DoLog EXTRA "Installing C library start files"
 
             # there are a few object files needed to link shared libraries,
             # which we build and install by hand
-            CT_DoExecLog ALL mkdir -p "${CT_SYSROOT_DIR}${extra_dir}/usr/lib"
-            CT_DoExecLog ALL ${make} ${JOBSFLAGS} \
-                        "${extra_make_args[@]}"   \
+            CT_DoExecLog ALL mkdir -p "${startfiles_dir}"
+            CT_DoExecLog ALL make ${JOBSFLAGS} \
+                        "${extra_make_args[@]}" \
                         csu/subdir_lib
             CT_DoExecLog ALL cp csu/crt1.o csu/crti.o csu/crtn.o    \
-                                "${CT_SYSROOT_DIR}${extra_dir}/usr/lib"
+                                "${startfiles_dir}"
 
             # Finally, 'libgcc_s.so' requires a 'libc.so' to link against.
             # However, since we will never actually execute its code,
             # it doesn't matter what it contains.  So, treating '/dev/null'
             # as a C source file, we produce a dummy 'libc.so' in one step
-            CT_DoExecLog ALL "${cross_cc}" -nostdlib        \
-                                           -nostartfiles    \
-                                           -shared          \
-                                           -x c /dev/null   \
-                                           -o "${CT_SYSROOT_DIR}${extra_dir}/usr/lib/libc.so"
+            CT_DoExecLog ALL "${CT_TARGET}-${CT_CC}" ${multi_flags}   \
+                                           -nostdlib                  \
+                                           -nostartfiles              \
+                                           -shared                    \
+                                           -x c /dev/null             \
+                                           -o "${startfiles_dir}/libc.so"
         fi # threads == nptl
-    fi # libc_headers == y
+    fi # libc_mode = startfiles
 
-    if [ "${libc_full}" = "y" ]; then
+    if [ "${libc_mode}" = "final" ]; then
         CT_DoLog EXTRA "Building C library"
-        CT_DoExecLog ALL ${make} ${JOBSFLAGS}         \
+        CT_DoExecLog ALL make ${JOBSFLAGS}         \
                               "${extra_make_args[@]}" \
                               all
 
         CT_DoLog EXTRA "Installing C library"
-        CT_DoExecLog ALL ${make} ${JOBSFLAGS}                               \
-                              "${extra_make_args[@]}"                       \
-                              install_root="${CT_SYSROOT_DIR}${extra_dir}"  \
+        CT_DoExecLog ALL make ${JOBSFLAGS}                 \
+                              "${extra_make_args[@]}"         \
+                              install_root="${multi_root}"    \
                               install
 
-        if [ "${CT_BUILD_MANUALS}" = "y" ]; then
+        if [ "${CT_BUILD_MANUALS}" = "y" -a "${multi_index}" = "${multi_count}" ]; then
+            # We only need to build the manuals once. Only build them on the
+            # last multilib target. If it's not multilib, it will happen on the
+            # only target.
             CT_DoLog EXTRA "Building and installing the C library manual"
             # Omit JOBSFLAGS as GLIBC has problems building the
             # manuals in parallel
-            CT_DoExecLog ALL ${make} pdf html
+            CT_DoExecLog ALL make pdf html
             CT_DoExecLog ALL mkdir -p ${CT_PREFIX_DIR}/share/doc
-            CT_DoExecLog ALL cp -av ${src_dir}/manual/*.pdf    \
-                                    ${src_dir}/manual/libc     \
+            CT_DoExecLog ALL cp -av manual/*.pdf    \
+                                    manual/libc     \
                                     ${CT_PREFIX_DIR}/share/doc
         fi
 
-        if [ "${CT_LIBC_LOCALES}" = "y" ]; then
+        if [ "${CT_LIBC_LOCALES}" = "y" -a "${multi_index}" = "${multi_count}" ]; then
             do_libc_locales
         fi
-    fi # libc_full == y
+    fi # libc_mode = final
+
+    CT_EndStep
 }
 
 # Build up the addons list, separated with $1
 do_libc_add_ons_list() {
     local sep="$1"
     local addons_list="$( echo "${CT_LIBC_ADDONS_LIST}"            \
-                          |${sed} -r -e "s/[[:space:],]/${sep}/g;" \
+                          |sed -r -e "s/[[:space:],]/${sep}/g;" \
                         )"
     if [ "${CT_LIBC_GLIBC_2_20_or_later}" != "y" ]; then
         case "${CT_THREADS}" in
@@ -508,7 +497,7 @@ do_libc_add_ons_list() {
     fi
     [ "${CT_LIBC_GLIBC_USE_PORTS}" = "y" ] && addons_list="${addons_list}${sep}ports"
     # Remove duplicate, leading and trailing separators
-    echo "${addons_list}" |${sed} -r -e "s/${sep}+/${sep}/g; s/^${sep}//; s/${sep}\$//;"
+    echo "${addons_list}" |sed -r -e "s/${sep}+/${sep}/g; s/^${sep}//; s/${sep}\$//;"
 }
 
 # Compute up the minimum supported Linux kernel version
@@ -527,7 +516,7 @@ do_libc_min_kernel_config() {
                 if [ ! -f "${version_code_file}" -o ! -r "${version_code_file}" ]; then
                     CT_Abort "Linux version is unavailable in installed headers files"
                 fi
-                version_code="$(${grep} -E LINUX_VERSION_CODE "${version_code_file}"  \
+                version_code="$(grep -E LINUX_VERSION_CODE "${version_code_file}"  \
                                  |cut -d' ' -f 3                                      \
                                )"
                 version=$(((version_code>>16)&0xFF))
@@ -537,7 +526,7 @@ do_libc_min_kernel_config() {
             elif [ "${CT_LIBC_GLIBC_KERNEL_VERSION_CHOSEN}" = "y" ]; then
                 # Trim the fourth part of the linux version, keeping only the first three numbers
                 min_kernel_config="$( echo "${CT_LIBC_GLIBC_MIN_KERNEL_VERSION}"               \
-                                      |${sed} -r -e 's/^([^.]+\.[^.]+\.[^.]+)(|\.[^.]+)$/\1/;' \
+                                      |sed -r -e 's/^([^.]+\.[^.]+\.[^.]+)(|\.[^.]+)$/\1/;' \
                                     )"
             fi
             echo "--enable-kernel=${min_kernel_config}"
@@ -545,79 +534,20 @@ do_libc_min_kernel_config() {
     esac
 }
 
-# Download glibc
-do_libc_get() {
-    local date
-    local version
-    local -a addons_list
-
-    addons_list=($(do_libc_add_ons_list " "))
-
-    # Main source
-    if [ "${CT_LIBC_CUSTOM}" = "y" ]; then
-        CT_GetCustom "glibc" "${CT_LIBC_VERSION}" "${CT_LIBC_GLIBC_CUSTOM_LOCATION}"
-        CT_LIBC_CUSTOM_LOCATION="${CT_SRC_DIR}/glibc-${CT_LIBC_VERSION}"
-    else
-        if echo ${CT_LIBC_VERSION} |${grep} -q linaro; then
-            # Linaro glibc releases come from regular downloads...
-            YYMM=`echo ${CT_LIBC_VERSION} |cut -d- -f3 |${sed} -e 's,^..,,'`
-            CT_GetFile "glibc-${CT_LIBC_VERSION}" \
-                       https://releases.linaro.org/${YYMM}/components/toolchain/glibc-linaro \
-                       http://cbuild.validation.linaro.org/snapshots
-        else
-            CT_GetFile "glibc-${CT_LIBC_VERSION}"                                        \
-                       {http,ftp,https}://ftp.gnu.org/gnu/glibc                          \
-                       ftp://{sourceware.org,gcc.gnu.org}/pub/glibc/{releases,snapshots}
-        fi
-    fi
-
-    # C library addons
-    for addon in "${addons_list[@]}"; do
-        # Never ever try to download these add-ons,
-        # they've always been internal
-        case "${addon}" in
-            nptl)   continue;;
-        esac
-
-        case "${addon}:${CT_LIBC_GLIBC_PORTS_EXTERNAL}" in
-            ports:y)    ;;
-            ports:*)    continue;;
-        esac
-
-        if ! CT_GetFile "glibc-${addon}-${CT_LIBC_VERSION}"                      \
-               http://mirrors.kernel.org/sourceware/glibc                        \
-               {http,ftp,https}://ftp.gnu.org/gnu/glibc                          \
-               ftp://{sourceware.org,gcc.gnu.org}/pub/glibc/{releases,snapshots}
-        then
-            # Some add-ons are bundled with glibc, others are
-            # bundled in their own tarball. Eg. NPTL is internal,
-            # while LinuxThreads was external. Also, for old
-            # versions of glibc, the libidn add-on was external,
-            # but with version >=2.10, it is internal.
-            CT_DoLog DEBUG "Addon '${addon}' could not be downloaded."
-            CT_DoLog DEBUG "We'll see later if we can find it in the source tree"
-        fi
-    done
-
-    return 0
-}
-
-# There is nothing to do for glibc check config
-do_libc_check_config() {
-    :
-}
-
-# Extract the files required for the libc locales
-# Nothing to do
-do_libc_locales_extract() {
-    :
-}
-
 # Build and install the libc locales
 do_libc_locales() {
     local src_dir="${CT_SRC_DIR}/glibc-${CT_LIBC_VERSION}"
     local -a extra_config
     local glibc_cflags
+
+    # To build locales, we'd need to build glibc for the build machine.
+    # Bail out if the host is not supported.
+    case "${CT_BUILD}" in
+        *-cygwin|*-darwin*)
+            CT_DoLog EXTRA "Skipping GNU libc locales: incompatible build machine"
+            return
+            ;;
+    esac
 
     mkdir -p "${CT_BUILD_DIR}/build-localedef"
     cd "${CT_BUILD_DIR}/build-localedef"
@@ -662,6 +592,7 @@ do_libc_locales() {
 
     CT_DoExecLog CFG                       \
     CFLAGS="${glibc_cflags}"               \
+    ${CONFIG_SHELL}                        \
     "${src_dir}/configure"                 \
         --prefix=/usr                      \
         --cache-file="$(pwd)/config.cache" \
@@ -669,10 +600,11 @@ do_libc_locales() {
         --disable-profile                  \
         --without-gd                       \
         --disable-debug                    \
+        --disable-sanity-checks            \
         "${extra_config[@]}"
 
     CT_DoLog EXTRA "Building C library localedef"
-    CT_DoExecLog ALL ${make} ${JOBSFLAGS}
+    CT_DoExecLog ALL make ${JOBSFLAGS}
 
     # The target's endianness and uint32_t alignment should be passed as options
     # to localedef, but glibc's localedef does not support these options, which
@@ -680,11 +612,8 @@ do_libc_locales() {
     # only if it has the same endianness and uint32_t alignment as the host's.
 
     CT_DoLog EXTRA "Installing C library locales"
-    CT_DoExecLog ALL ${make} ${JOBSFLAGS}                  \
+    CT_DoExecLog ALL make ${JOBSFLAGS}                  \
                           install_root="${CT_SYSROOT_DIR}" \
                           localedata/install-locales
 }
 
-do_libc_post_cc() {
-    :
-}

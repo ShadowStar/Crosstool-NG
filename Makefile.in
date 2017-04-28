@@ -57,11 +57,13 @@ export docdir          := @docdir@@subdocdir@
 export mandir          := @mandir@
 export datarootdir     := @datarootdir@
 export install         := @INSTALL@
-export bash            := @_BASH@
-export awk             := @_AWK@
+export bash            := @BASH_SHELL@
+export awk             := @AWK@
 export grep            := @GREP@
 export make            := @MAKE@
 export sed             := @SED@
+export wget            := @wget@
+export curl            := @curl@
 export libtool         := @LIBTOOL@
 export libtoolize      := @LIBTOOLIZE@
 export objcopy         := @OBJCOPY@
@@ -69,6 +71,7 @@ export objdump         := @OBJDUMP@
 export readelf         := @READELF@
 export patch           := @PATCH@
 export gperf           := @GPERF@
+export gperf_len_type  := @GPERF_LEN_TYPE@
 export CC              := @CC@
 export CPP             := @CPP@
 export CPPFLAGS        := @CPPFLAGS@
@@ -78,6 +81,7 @@ export LIBS            := @LIBS@
 export INTL_LIBS       := @INTL_LIBS@
 export curses_hdr      := @ac_ct_curses_hdr@
 export gettext         := @gettext@
+export CPU_COUNT       := @CPU_COUNT@
 
 # config options to push down to kconfig
 KCONFIG:= @kconfig_options@
@@ -154,9 +158,10 @@ uninstall: real-uninstall
 # Build rules
 
 build-bin: $(PROG_NAME)             \
+           scripts/scripts.mk       \
            scripts/crosstool-NG.sh  \
            scripts/saveSample.sh    \
-           scripts/showTuple.sh
+           scripts/showConfig.sh
 	@chmod 755 $^
 
 build-lib: config/configure.in  \
@@ -186,6 +191,9 @@ define sed_it
 	           -e 's,@@CT_make@@,$(make),g;'            \
 	           -e 's,@@CT_bash@@,$(bash),g;'            \
 	           -e 's,@@CT_awk@@,$(awk),g;'              \
+	           -e 's,@@CT_wget@@,$(wget),g;'            \
+	           -e 's,@@CT_curl@@,$(curl),g;'            \
+	           -e 's,@@CT_cpucount@@,$(CPU_COUNT),g;'   \
 	           $< >$@
 endef
 
@@ -198,41 +206,18 @@ $(PROG_NAME): ct-ng.in Makefile
 %: %.in Makefile
 	$(call sed_it)
 
+__paths_vars	= install bash awk grep make sed libtool \
+		  libtoolize objcopy objdump readelf patch gperf
+
 # We create a script fragment that is parseable from inside a Makefile,
-# and one from inside a shell script
+# and one from inside a shell script.
 paths.mk: FORCE
 	@echo "  GEN    '$@'"
-	@(echo 'export install=$(install)';         \
-	  echo 'export bash=$(bash)';               \
-	  echo 'export awk=$(awk)';                 \
-	  echo 'export grep=$(grep)';               \
-	  echo 'export make=$(make)';               \
-	  echo 'export sed=$(sed)';                 \
-	  echo 'export libtool=$(libtool)';         \
-	  echo 'export libtoolize=$(libtoolize)';   \
-	  echo 'export objcopy=$(objcopy)';         \
-	  echo 'export objdump=$(objdump)';         \
-	  echo 'export readelf=$(readelf)';         \
-	  echo 'export patch=$(patch)';             \
-	  echo 'export gperf=$(gperf)';             \
-	 ) >$@
+	@{ $(foreach w,$(__paths_vars),$(if $($w),echo 'export $w=$(subst ','\'',$($w))';)) :; } >$@
 
 paths.sh: FORCE
 	@echo "  GEN    '$@'"
-	@(echo 'export install="$(install)"';       \
-	  echo 'export bash="$(bash)"';             \
-	  echo 'export awk="$(awk)"';               \
-	  echo 'export grep="$(grep)"';             \
-	  echo 'export make="$(make)"';             \
-	  echo 'export sed="$(sed)"';               \
-	  echo 'export libtool="$(libtool)"';       \
-	  echo 'export libtoolize="$(libtoolize)"'; \
-	  echo 'export objcopy="$(objcopy)"';       \
-	  echo 'export objdump="$(objdump)"';       \
-	  echo 'export readelf="$(readelf)"';       \
-	  echo 'export patch="$(patch)"';           \
-	  echo 'export gperf="$(gperf)"';           \
-	 ) >$@
+	@{ $(foreach w,$(__paths_vars),$(if $($w),echo 'export $w="$(subst ','\'',$($w))"';)) :; } >$@
 
 config/configure.in: FORCE
 	@echo "  GEN    '$@'"
@@ -257,12 +242,14 @@ FORCE:
 clean-bin:
 	@echo "  RM     '$(PROG_NAME)'"
 	@rm -f $(PROG_NAME)
+	@echo "  RM     'scripts/scripts.mk'"
+	@rm -f scripts/scripts.mk
 	@echo "  RM     'scripts/crosstool-NG.sh'"
 	@rm -f scripts/crosstool-NG.sh
 	@echo "  RM     'scripts/saveSample.sh'"
 	@rm -f scripts/saveSample.sh
-	@echo "  RM     'scripts/showTuple.sh'"
-	@rm -f scripts/showTuple.sh
+	@echo "  RM     'scripts/showConfig.sh'"
+	@rm -f scripts/showConfig.sh
 
 clean-lib:
 	@echo "  RM     'paths'"
@@ -317,14 +304,13 @@ $(patsubst %,install-lib-%-copy,$(LIB_SUB_DIR)): $(DESTDIR)$(libdir)
 	@tar cf - --exclude='*.sh.in' $(patsubst install-lib-%-copy,%,$(@)) \
 	 |(cd "$(DESTDIR)$(libdir)"; tar xf -)
 
-# Huh? It seems we need at least one command to make this rule kick-in.
-install-lib-%: install-lib-%-copy; @true
+# We need at least one command to make this rule kick-in.
+install-lib-%: install-lib-%-copy
+	@true
 
-# Huh? that one does not inherit the -opy dependency, above...
 install-lib-scripts: install-lib-scripts-copy
 	@chmod a+x $(DESTDIR)$(libdir)/scripts/crosstool-NG.sh
 	@chmod a+x $(DESTDIR)$(libdir)/scripts/saveSample.sh
-	@rm -f "$(DESTDIR)$(libdir)/scripts/addToolVersion.sh"
 
 install-lib-main: $(DESTDIR)$(libdir) $(patsubst %,install-lib-%,$(LIB_SUB_DIR))
 	@echo "  INST    'steps.mk'"
@@ -349,6 +335,9 @@ install-lib-samples: $(DESTDIR)$(libdir) install-lib-main
 	         $(install) -m 644 "$${libc_cfg}"                               \
 	                           "$(DESTDIR)$(libdir)/$${samp_dir}";          \
 	     done;                                                              \
+	     [ -e "$${samp_dir}/broken" ] &&                                    \
+                 $(install) -m 644 "$${samp_dir}/broken"                        \
+                    "$(DESTDIR)$(libdir)/$${samp_dir}/" || :;                   \
 	 done
 	@$(install) -m 644 samples/samples.mk "$(DESTDIR)$(libdir)/samples/samples.mk"
 
@@ -360,9 +349,19 @@ install-lib-kconfig: $(DESTDIR)$(libdir) install-lib-main
 	    install "kconfig/$${f}" "$(DESTDIR)$(libdir)/kconfig/$${f}";    \
 	 done
 
-install-doc: $(DESTDIR)$(docdir)
-	@echo "  INST    'docs/*.txt'"
-	@for doc_file in docs/*.txt; do                              \
+install-doc: install-doc-$(if $(wildcard docs/MANUAL_ONLINE),message,real)
+
+install-doc-message:
+	@echo "********************************************************************"
+	@echo "  You are building from a development version that does not include"
+	@echo "  the documentation. Refer to the manual online at:"
+	@echo "      http://crosstool-ng.github.io/docs"
+	@echo "********************************************************************"
+
+
+install-doc-real: $(DESTDIR)$(docdir)
+	@echo "  INST    'docs/manual/*.md'"
+	@for doc_file in docs/manual/*.md; do                        \
 	     $(install) -m 644 "$${doc_file}" "$(DESTDIR)$(docdir)"; \
 	 done
 

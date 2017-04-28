@@ -5,7 +5,7 @@ comment "Paths"
 config LOCAL_TARBALLS_DIR
     string
     prompt "Local tarballs directory" if ! BACKEND
-    default ""
+    default "${HOME}/src"
     help
       If you have previously downloaded the tarballs, enter the PATH where
       you stored them here.
@@ -14,19 +14,10 @@ config SAVE_TARBALLS
     bool
     prompt "Save new tarballs" if ! BACKEND
     depends on LOCAL_TARBALLS_DIR != "" || BACKEND
-    default y if BACKEND
+    default y
     help
       If you say 'y' here, new downloaded tarballs will be saved in the
       directory you entered above.
-
-config CUSTOM_LOCATION_ROOT_DIR
-    string
-    prompt "Directory containing custom source components"
-    depends on EXPERIMENTAL
-    help
-      This is the path CT-NG will attempt to use as a root for locating
-      local copies of source components (CUSTOM_LOCATION_ROOT_DIR/component)
-      unless a component declares its own specific custom location.
 
 config WORK_DIR
     string
@@ -49,25 +40,16 @@ config WORK_DIR
       
       Do *NOT* change it if you don't know better.
 
+config BUILD_TOP_DIR
+    string
+    default "${CT_WORK_DIR}/${CT_HOST:+HOST-${CT_HOST}/}${CT_TARGET}"
+
 config PREFIX_DIR
     string
     prompt "Prefix directory" if ! BACKEND
-    default "${HOME}/x-tools/${CT_TARGET}"
+    default "${CT_PREFIX:-${HOME}/x-tools}/${CT_HOST:+HOST-${CT_HOST}/}${CT_TARGET}"
     help
       This is the path the toolchain will run from.
-
-config INSTALL_DIR
-    string
-#    prompt "Install directory"
-    default "${CT_PREFIX_DIR}"
-#    help
-#      This is the path the toolchain will be installed into.
-#      
-#      Normally, you would set this to ${CT_PREFIX_DIR}, but if for some reasons
-#      you can't write there, you can install somewhere else and have a third
-#      person do the install for you.
-#      The reason you might also want to install elsewhere is if you are going
-#      to package your shinny new toolchain for distribution.
 
 config RM_RF_PREFIX_DIR
     bool
@@ -107,7 +89,7 @@ config BUILD_MANUALS
       Build the PDF and HTML manuals for the main components such as
       binutils, GCC, GDB, and the C library.
 
-config INSTALL_DIR_RO
+config PREFIX_DIR_RO
     bool
     prompt "Render the toolchain read-only"
     default y
@@ -130,7 +112,6 @@ config STRIP_HOST_TOOLCHAIN_EXECUTABLES
 config STRIP_TARGET_TOOLCHAIN_EXECUTABLES
     bool
     prompt "Strip target toolchain executables"
-    depends on CC_GCC_4_6_or_later
     help
       It means using install-strip target for GCC 4.6 or later.
       An install-strip make target is provided that installs stripped
