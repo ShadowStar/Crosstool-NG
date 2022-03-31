@@ -69,20 +69,11 @@ do_finish() {
             CT_DoExecLog ALL "${CT_TARGET}-strip" ${strip_args}         \
                              "${CT_TARGET}/debug-root/usr/bin/gdbserver${exe_suffix}"
         fi
-        if [ "${CT_CC_gcc}" = "y" ]; then
-            # We can not use the version in CT_CC_GCC_VERSION because
+        if [ "${CT_CC_GCC}" = "y" ]; then
+            # We can not use the version in CT_GCC_VERSION because
             # of the Linaro stuff. So, harvest the version string
             # directly from the gcc sources...
-            # All gcc 4.x seem to have the version in gcc/BASE-VER
-            # while version prior to 4.x have the version in gcc/version.c
-            # Of course, here is not the better place to do that...
-            if [ -f "${CT_SRC_DIR}/gcc-${CT_CC_GCC_VERSION}/gcc/BASE-VER" ]; then
-                gcc_version=$( cat "${CT_SRC_DIR}/gcc-${CT_CC_GCC_VERSION}/gcc/BASE-VER" )
-            else
-                gcc_version=$(sed -r -e '/version_string/!d; s/^.+= "([^"]+)".*$/\1/;' \
-                                   "${CT_SRC_DIR}/gcc-${CT_CC_GCC_VERSION}/gcc/version.c" \
-                             )
-            fi
+            gcc_version=$( cat "${CT_SRC_DIR}/gcc/gcc/BASE-VER" )
             for _t in "bin/${CT_TARGET}-"*                                      \
                       "${CT_TARGET}/bin/"*                                      \
                       "libexec/gcc/${CT_TARGET}/${gcc_version}/"*               \
@@ -125,7 +116,6 @@ do_finish() {
                -e 's|@@CT_grep@@|'"grep"'|g;'             \
                -e 's|@@CT_make@@|'"make"'|g;'             \
                -e 's|@@CT_sed@@|'"sed"'|g;'               \
-               -e 's|@@CT_SYSROOT@@|'"${CT_SYSROOT_REL_DIR}"'|g;' \
                "${CT_LIB_DIR}/scripts/xldd.in"               \
                >"${CT_PREFIX_DIR}/bin/${CT_TARGET}-ldd"
         CT_DoExecLog ALL chmod 755 "${CT_PREFIX_DIR}/bin/${CT_TARGET}-ldd"
@@ -142,6 +132,10 @@ do_finish() {
         CT_DoForceRmdir "${CT_PREFIX_DIR}/"{,usr/}{,share/}{man,info}
         CT_DoForceRmdir "${CT_SYSROOT_DIR}/"{,usr/}{,share/}{man,info}
         CT_DoForceRmdir "${CT_DEBUGROOT_DIR}/"{,usr/}{,share/}{man,info}
+    fi
+
+    if [ "${CT_INSTALL_LICENSES}" = y ]; then
+        CT_InstallCopyingInformation
     fi
 
     CT_EndStep

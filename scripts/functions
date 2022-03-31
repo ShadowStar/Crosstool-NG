@@ -1,18 +1,19 @@
 # -*- mode: sh; tab-width: 4 -*-
 # vi: ts=4:sw=4:sts=4:et
+# vim: filetype=sh :
 # This file contains some useful common functions
 # Copyright 2007 Yann E. MORIN
 # Licensed under the GPL v2. See COPYING in the root of this package
 
 CT_LoadConfig() {
-    local o
+    local o oldvals vals
 
     # Parse the configuration file
     # It has some info about the logging facility, so include it early
     # It also sets KERNEL/ARCH/... for file inclusion below. Does not handle
     # recursive definitions yet. We don't need arrays at this point.
     CT_TestOrAbort "Configuration file not found. Please create one." -r .config
-    . .config
+    . ./.config # Prefixing with ./ prevents Bash from searching $PATH
 
     # Include sub-scripts instead of calling them: that way, we do not have to
     # export any variable, nor re-parse the configuration and functions files.
@@ -22,8 +23,8 @@ CT_LoadConfig() {
     . "${CT_LIB_DIR}/scripts/build/kernel/${CT_KERNEL}.sh"
     . "${CT_LIB_DIR}/scripts/build/companion_libs.sh"
     . "${CT_LIB_DIR}/scripts/build/binutils/${CT_BINUTILS}.sh"
-    . "${CT_LIB_DIR}/scripts/build/libc/${CT_LIBC}.sh"
-    . "${CT_LIB_DIR}/scripts/build/cc.sh"
+    . "${CT_LIB_DIR}/scripts/build/libc.sh"
+    . "${CT_LIB_DIR}/scripts/build/cc/${CT_CC}.sh"
     . "${CT_LIB_DIR}/scripts/build/debug.sh"
     . "${CT_LIB_DIR}/scripts/build/test_suite.sh"
 
@@ -36,7 +37,7 @@ CT_LoadConfig() {
     oldvals=""
     try=0
     while [ "$try" -le 10 ]; do
-        . .config
+        . ./.config # Prefixing with ./ prevents Bash from searching $PATH
         vals=`set | ${grep} -E '^CT_'`
         if [ "$oldvals" = "$vals" ]; then
             break
@@ -155,8 +156,28 @@ CT_OnError() {
             CT_DoLog ERROR ">>  For more info on this error, look at the file: '${CT_BUILD_LOG#${CT_TOP_DIR}/}'"
         fi
         CT_DoLog ERROR ">>  There is a list of known issues, some with workarounds, in:"
-        CT_DoLog ERROR ">>      '${CT_DOC_DIR#${CT_TOP_DIR}/}/B - Known issues.txt'"
+        if [ -r "${CT_DOC_DIR}/manual/B_Known_issues.md" ]; then
+            CT_DoLog ERROR ">>      '${CT_DOC_DIR#${CT_TOP_DIR}/}/manual/B_Known_issues.md'"
+        else
+            CT_DoLog ERROR ">>      https://crosstool-ng.github.io/docs/known-issues/"
+        fi
         CT_DoLog ERROR ">>"
+        if [ -n "${CT_EXPERIMENTAL}" ]; then
+            CT_DoLog ERROR ">> NOTE: Your configuration includes features marked EXPERIMENTAL."
+            CT_DoLog ERROR ">> Before submitting a bug report, try to reproduce it without enabling"
+            CT_DoLog ERROR ">> any experimental features. Otherwise, you'll need to debug it"
+            CT_DoLog ERROR ">> and present an explanation why it is a bug in crosstool-NG - or"
+            CT_DoLog ERROR ">> preferably, a fix."
+            CT_DoLog ERROR ">>"
+        fi
+        if [ "${CT_PATCH_ORDER}" != "bundled" ]; then
+            CT_DoLog ERROR ">> NOTE: You configuration uses non-default patch sets. Please"
+            CT_DoLog ERROR ">> select 'bundled' as the set of patches applied and attempt"
+            CT_DoLog ERROR ">> to reproduce this issue. Issues reported with other patch"
+            CT_DoLog ERROR ">> set selections (none, local, bundled+local) are going to be"
+            CT_DoLog ERROR ">> closed without explanation."
+            CT_DoLog ERROR ">>"
+        fi
         CT_DoLog ERROR ">>  If you feel this is a bug in crosstool-NG, report it at:"
         CT_DoLog ERROR ">>      https://github.com/crosstool-ng/crosstool-ng/issues/"
         CT_DoLog ERROR ">>"
@@ -178,7 +199,7 @@ trap CT_OnError ERR
 set -E
 
 # Make pipes fail on the _first_ failed command
-# Not supported on bash < 3.x, but we need it, so drop the obsoleting bash-2.x
+# Not supported on bash < 3.x, but we need it, so drop the obsolete bash-2.x
 set -o pipefail
 
 # Don't hash commands' locations, and search every time it is requested.
@@ -200,7 +221,7 @@ CT_LogEnable() {
 	exec 6>&1 7>&2 8<&0
 	CT_BUILD_LOG="${CT_TOP_DIR}/build.log"
 	CT_LOG_ENABLED=y
-        if [ "$clean" = "yes" ]; then
+    if [ "$clean" = "yes" ]; then
 		rm -f "${CT_BUILD_LOG}"
 	fi
 	exec >>"${CT_BUILD_LOG}"
@@ -262,12 +283,15 @@ CT_DoLog() {
           _prog_bar[3]='|'
           indent=$((2*CT_STEP_COUNT))
           while read line; do
-              case "${CT_LOG_SEE_TOOLS_WARN},${line}" in
-                y,*"warning:"*)         cur_L=WARN; cur_l=${CT_LOG_LEVEL_WARN};;
-                y,*"WARNING:"*)         cur_L=WARN; cur_l=${CT_LOG_LEVEL_WARN};;
-                *"error:"*)             cur_L=ERROR; cur_l=${CT_LOG_LEVEL_ERROR};;
-                *"make["*"]: ***"*)     cur_L=ERROR; cur_l=${CT_LOG_LEVEL_ERROR};;
-                *)                      cur_L="${LEVEL}"; cur_l="${level}";;
+              case "${CT_LOG_SEE_TOOLS_WARN:-n},${line}" in
+                  y,*[[:space:]][Ww]arning:*|y,[Ww]arning:*|y,*[[:space:]]WARNING:*|y,WARNING:*)
+                      cur_L=WARN; cur_l=${CT_LOG_LEVEL_WARN};;
+                  *[[:space:]][Ee]rror:*|[yn],[Ee]rror:*)
+                      cur_L=ERROR; cur_l=${CT_LOG_LEVEL_ERROR};;
+                  *"make["*"]: ***"*)
+                      cur_L=ERROR; cur_l=${CT_LOG_LEVEL_ERROR};;
+                  *)
+                      cur_L="${LEVEL}"; cur_l="${level}";;
               esac
               # There will always be a log file (stdout, fd #1), be it /dev/null
               if [ -n "${CT_LOG_ENABLED}" ]; then
@@ -283,7 +307,7 @@ CT_DoLog() {
                       _prog_bar_cpt=$(((_prog_bar_cpt+1)%40))
                   fi
               elif [ ${cur_l} -le ${CT_LOG_LEVEL_WARN} ]; then
-                  printf "[%-5s]%*s%s%s\n" "${cur_L}" "${indent}" " " "${line}"
+                  printf "[%-5s]%*s%s%s\n" "${cur_L}" "${indent}" " " "${line}" >&2
               fi
           done
         )
@@ -298,10 +322,24 @@ CT_DoExecLog() {
     local level="$1"
     local cur_cmd
     local ret
+    local cmd_seen
     shift
+
     (
     for i in "$@"; do
-        cur_cmd+="'${i}' "
+        case "${i}" in
+        *=*)
+            if [ -z "${cmd_seen}" ]; then
+                cur_cmd+=" ${i%%=*}='${i#*=}'"
+            else
+                cur_cmd+=" '${i}'"
+            fi
+            ;;
+        *)
+            cur_cmd+=" '${i}'"
+            cmd_seen=y
+            ;;
+        esac
     done
     while true; do
         case "${1}" in
@@ -348,6 +386,7 @@ CT_DoExecLog() {
             break
         fi
     done
+    CT_DoLog DEBUG "==> Return status ${ret}"
     exit ${ret}
     )
     # Catch failure of the sub-shell
@@ -537,19 +576,16 @@ CT_Pushd() {
     pushd "$1" >/dev/null 2>&1
 }
 CT_Popd() {
+    local dir=`dirs +0`
+
+    CT_DoLog DEBUG "Leaving '${dir}'"
     popd >/dev/null 2>&1
 }
 
-# Create a dir and cd or pushd into it
-# Usage: CT_mkdir_cd <dir/to/create>
-#        CT_mkdir_pushd <dir/to/create>
-CT_mkdir_cd() {
-    local dir="${1}"
-
-    mkdir -p "${dir}"
-    cd "${dir}"
-}
-CT_mkdir_pushd() {
+# Create a dir and pushd into it
+# Usage: CT_mkdir_pushd <dir/to/create>
+CT_mkdir_pushd()
+{
     local dir="${1}"
 
     mkdir -p "${dir}"
@@ -559,7 +595,8 @@ CT_mkdir_pushd() {
 # Creates a temporary directory
 # $1: variable to assign to
 # Usage: CT_MktempDir foo
-CT_MktempDir() {
+CT_MktempDir()
+{
     # Some mktemp do not allow more than 6 Xs
     eval "$1"=$(mktemp -q -d "${CT_BUILD_DIR}/tmp.XXXXXX")
     CT_TestOrAbort "Could not make temporary directory" -n "${!1}" -a -d "${!1}"
@@ -569,26 +606,29 @@ CT_MktempDir() {
 
 # Removes one or more directories, even if it is read-only, or its parent is
 # Usage: CT_DoForceRmdir dir [...]
-CT_DoForceRmdir() {
+CT_DoForceRmdir()
+{
     local dir
-    local mode
+    local cnt
+
     for dir in "${@}"; do
-        [ -d "${dir}" ] || continue
-        case "${CT_CONFIGURE_has_stat_flavor_GNU},${CT_CONFIGURE_has_stat_flavor_BSD}" in
-            y,*)
-                mode="$(stat -c '%a' "$(dirname "${dir}")")"
-                ;;
-            *,y)
-                mode="$(stat -f '%Lp' "$(dirname "${dir}")")"
-                ;;
-            *)
-                CT_Abort "Unknown stat format options"
-                ;;
-        esac
-        CT_DoExecLog ALL chmod u+w "$(dirname "${dir}")"
-        CT_DoExecLog ALL chmod -R u+w "${dir}"
-        CT_DoExecLog ALL rm -rf "${dir}"
-        CT_DoExecLog ALL chmod ${mode} "$(dirname "${dir}")"
+        [ -e "${dir}" ] || continue
+        CT_TestOrAbort "Cannot remove '${dir}': not a directory" -d "${dir}"
+        CT_DoExecLog ALL chmod -R u+w "${dir}" || :;
+        if CT_DoExecLog ALL rm -rf "${dir}"; then
+            continue
+        fi
+        # If we succeeded in removing the whole directory, good. If not,
+        # but only the top level directory remains - it is fine, too, because
+        # this function is used to remove the directories that are going to be
+        # re-created. Hence, verify we at least succeeded in verifying the
+        # contents of this directory.
+        if [ -d "${dir}" ]; then
+            cnt=$(ls -a "${dir}" | { grep -v '^\.\{1,2\}$' || :; } | wc -l)
+            if [ "${cnt}" != "0" ]; then
+                CT_Abort "Failed to remove '${dir}'"
+            fi
+        fi
     done
 }
 
@@ -597,7 +637,8 @@ CT_DoForceRmdir() {
 # $1: path to add
 # $2: add as 'first' or 'last' path, 'first' is assumed if $2 is empty
 # Usage CT_SetLibPath /some/where/lib [first|last]
-CT_SetLibPath() {
+CT_SetLibPath()
+{
     local path="$1"
     local pos="$2"
 
@@ -624,9 +665,13 @@ CT_SetLibPath() {
 
 # Build up the list of allowed tarball extensions
 # Add them in the prefered order; most preferred comes first
-CT_DoListTarballExt() {
+CT_DoListTarballExt()
+{
     printf ".tar.xz\n"
     printf ".tar.lzma\n"
+    if [ "${CT_CONFIGURE_has_lzip}" = "y" ]; then
+        printf ".tar.lz\n"
+    fi
     printf ".tar.bz2\n"
     printf ".tar.gz\n.tgz\n"
     printf ".tar\n"
@@ -637,23 +682,32 @@ CT_DoListTarballExt() {
 # Usage: CT_GetFileExtension <component_name-component_version> [extension]
 # If found, echoes the extension to stdout, and return 0
 # If not found, echoes nothing on stdout, and return !0.
-CT_GetFileExtension() {
+CT_GetFileExtension()
+{
     local ext
     local file="$1"
-    shift
-    local first_ext="$1"
 
-    # we need to also check for an empty extension for those very
-    # peculiar components that don't have one (such as sstrip from
-    # buildroot).
-    for ext in ${first_ext} $(CT_DoListTarballExt) /.git ''; do
-        if [ -e "${CT_TARBALLS_DIR}/${file}${ext}" -o -L  "${CT_TARBALLS_DIR}/${file}${ext}" ]; then
+    for ext in $(CT_DoListTarballExt); do
+        if [ -e "${file}${ext}" -o -L "${file}${ext}" ]; then
             echo "${ext}"
             exit 0
         fi
     done
-
     exit 1
+}
+
+# Get file's basename by stripping supported archive extensions
+CT_GetFileBasename()
+{
+    local bn="${1}"
+    local ext
+
+    for ext in $(CT_DoListTarballExt); do
+        if [ "${bn%${ext}}" != "${bn}" ]; then
+            echo "${bn%${ext}}"
+            exit 0
+        fi
+    done
 }
 
 # Try to retrieve the specified URL (HTTP or FTP)
@@ -661,7 +715,8 @@ CT_GetFileExtension() {
 # This functions always returns true (0), as it can be legitimate not
 # to find the requested URL (think about snapshots, different layouts
 # for different gcc versions, etc...).
-CT_DoGetFile() {
+CT_DoGetFile()
+{
     local url="${1}"
     local dest="${CT_TARBALLS_DIR}/${url##*/}"
     local tmp="${dest}.tmp-dl"
@@ -676,6 +731,7 @@ CT_DoGetFile() {
         T="${CT_CONNECT_TIMEOUT}"
     fi
 
+    CT_DoLog DEBUG "Trying '${url}'"
     if [ "${CT_DOWNLOAD_AGENT_WGET}" = "y" ]; then
         if CT_DoExecLog ALL wget ${CT_DOWNLOAD_WGET_OPTIONS} \
                                  ${T:+-T ${T}}               \
@@ -696,629 +752,322 @@ CT_DoGetFile() {
         # Success, we got it, good!
         mv "${tmp}" "${dest}"
         CT_DoLog DEBUG "Got it from: \"${url}\""
+        return 0
     else
-        # Woops...
+        # Whoops...
         rm -f "${tmp}"
         CT_DoLog DEBUG "Not at this location: \"${url}\""
+        return 1
     fi
-}
-
-# This function tries to retrieve a tarball form a local directory
-# Usage: CT_GetLocal <basename> [.extension]
-CT_GetLocal() {
-    local basename="$1"
-    local first_ext="$2"
-    local ext
-
-    # Do we already have it in *our* tarballs dir?
-    if ext="$( CT_GetFileExtension "${basename}" ${first_ext} )"; then
-        CT_DoLog DEBUG "Already have '${basename}'"
-        return 0
-    fi
-
-    if [ -n "${CT_LOCAL_TARBALLS_DIR}" ]; then
-        CT_DoLog DEBUG "Trying to retrieve an already downloaded copy of '${basename}'"
-        # We'd rather have a bzip2'ed tarball, then gzipped tarball, plain tarball,
-        # or, as a failover, a file without extension.
-        for ext in ${first_ext} $(CT_DoListTarballExt) ''; do
-            CT_DoLog DEBUG "Trying '${CT_LOCAL_TARBALLS_DIR}/${basename}${ext}'"
-            if [ -r "${CT_LOCAL_TARBALLS_DIR}/${basename}${ext}" -a \
-                 "${CT_FORCE_DOWNLOAD}" != "y" ]; then
-                CT_DoLog DEBUG "Got '${basename}' from local storage"
-                CT_DoExecLog ALL ln -s "${CT_LOCAL_TARBALLS_DIR}/${basename}${ext}" "${CT_TARBALLS_DIR}/${basename}${ext}"
-                return 0
-            fi
-        done
-    fi
-    return 1
-}
-
-# This function gets the custom source from either a tarball or directory
-# Usage: CT_GetCustom <name> <version> <location>
-CT_GetCustom() {
-    local component_name="$1"
-    local component_version="$2"
-    local component_location="$3"
-
-    # Some local variables we use to help us figure out what to do
-    local component_location_type="dir" # str: 'file' or 'dir'
-    local component_location_filename="" # filename... if it's a file
-
-    CT_TestAndAbort \
-        "${component_name}: Custom location setting is empty" \
-        -z "${component_location}"
-
-    CT_TestAndAbort \
-        "${component_name}: Custom version setting is empty" \
-        -z "${component_version}"
-
-    if [ -f "${component_location}" ]; then
-        component_location_type="file"
-        component_location_filename="$(basename ${component_location})"
-    elif [ -d "${component_location}" ]; then
-        # Yes, it's the default, but it rules out the else case in the `if'.
-        component_location_type="dir"
-        # as -d and -f say: it's a <directory|file> and is readable!
-    else
-        CT_Abort "${component_name}: Unable to read ${component_location}, make sure the setting is correct and double check the permissions!"
-    fi
-
-    if [ "${component_location_type}" = "file" ]; then
-        CT_DoLog EXTRA "Got '${component_location}' from custom location"
-        # We need to know the custom tarball extension,
-        # so we can create a properly-named symlink, which
-        # we use later on in 'extract'
-        case "${component_location}" in
-            *.tar.xz|*.tar.bz2|*.tar.lzma|*.tar.gz|*.tgz|*.tar|*.zip) ;;
-            *) CT_Abort "Unknown extension for custom tarball '${component_location}'" ;;
-        esac
-        [ ! -L "${CT_TARBALLS_DIR}/${component_location_filename}" ] && \
-            CT_DoExecLog DEBUG ln -sf "${component_location}" \
-            "${CT_TARBALLS_DIR}/${component_location_filename}"
-    elif [ "${component_location_type}" = "dir" ]; then
-        CT_DoLog EXTRA "Got '${component_location}' from custom location"
-        [ ! -d "${CT_SRC_DIR}/${component_name}-${component_version}" ] && \
-            CT_DoExecLog DEBUG ln -sf "${component_location}" \
-            "${CT_SRC_DIR}/${component_name}-${component_version}"
-
-        # Don't try to extract from source directory, it's extracted!
-        touch "${CT_SRC_DIR}/.${component_name}-${component_version}.extracted"
-    fi
-    # Don't patch a custom source, it's custom!
-    touch "${CT_SRC_DIR}/.${component_name}-${component_version}.patched"
 }
 
 # This function saves the specified to local storage if possible,
-# and if so, symlinks it for later usage
-# Usage: CT_SaveLocal </full/path/file.name>
-CT_SaveLocal() {
+# and if so, symlinks it for later usage. This function is called from
+# the `if' condition (via the CT_GetFile) and therefore must return
+# on error rather than relying on the shell's ERR trap to catch it.
+# Usage: CT_SaveLocal </full/path/file.name> <subdirectory>
+CT_SaveLocal()
+{
     local file="$1"
+    local savedir="${CT_LOCAL_TARBALLS_DIR}${CT_TARBALLS_BUILDROOT_LAYOUT:+/$2}"
     local basename="${file##*/}"
 
     if [ "${CT_SAVE_TARBALLS}" = "y" ]; then
         CT_DoLog EXTRA "Saving '${basename}' to local storage"
+        # The subdirectory for this package may not exist yet; create it
+        if [ ! -d "${savedir}" ]; then
+            CT_DoExecLog ALL mkdir -p "${savedir}"
+        fi
         # The file may already exist if downloads are forced: remove it first
-        CT_DoExecLog ALL rm -f "${CT_LOCAL_TARBALLS_DIR}/${basename}"
-        CT_DoExecLog ALL mv -f "${file}" "${CT_LOCAL_TARBALLS_DIR}"
-        CT_DoExecLog ALL ln -s "${CT_LOCAL_TARBALLS_DIR}/${basename}" "${file}"
+        if ! CT_DoExecLog ALL rm -f "${savedir}/${basename}"; then
+            return 1
+        fi
+        if ! CT_DoExecLog ALL mv -f "${file}" "${savedir}"; then
+            # Move may have failed if the local tarball storage is on a different
+            # filesystem. Fallback to copy+delete.
+            if ! CT_DoExecLog ALL cp -f "${file}" "${savedir}"; then
+                return 1
+            fi
+            if ! CT_DoExecLog ALL rm -f "${file}"; then
+                return 1
+            fi
+        fi
+        if ! CT_DoExecLog ALL ln -s "${savedir}/${basename}" "${file}"; then
+            return 1
+        fi
     fi
 }
 
-# Download the file from one of the URLs passed as argument
-# Usage: CT_GetFile <basename> [.extension] <url> [url ...]
-CT_GetFile() {
-    local ext
-    local -a URLS
-    local url
-    local file="$1"
-    local first_ext
-    shift
-    # If next argument starts with a dot, then this is not an URL,
-    # and we can consider that it is a preferred extension.
-    case "$1" in
-        .*) first_ext="$1"
-            shift
-            ;;
-    esac
+# Verify the file against a known digest.
+# Usage: CT_DoVerifyDigest <local-file-path> <package-directory>
+CT_DoVerifyDigest()
+{
+    local path="$1"
+    local file="${path##*/}"
+    local dir="${path%/*}"
+    local pkgdir="$2"
+    local alg="${CT_VERIFY_DOWNLOAD_DIGEST_ALG}"
+    local chksum a f c
 
-    # Does it exist localy?
-    if CT_GetLocal "${file}" ${first_ext}; then
+    if [ ! -r "${pkgdir}/chksum" ]; then
+        CT_DoLog WARN "Not verifying '${file}': digest missing"
         return 0
     fi
-    # No, it does not...
+    CT_DoLog EXTRA "Verifying ${alg^^} checksum for '${file}'"
+    chksum=`"${alg}sum" "${path}"`
+    chksum="${chksum%%[[:space:]]*}"
+    while read a f c; do
+        if [ "${a}" != "${alg}" -o "${f}" != "${file}" ]; then
+            continue
+        fi
+        if [ "${c}" = "${chksum}" ]; then
+            CT_DoLog DEBUG "Correct ${alg} digest for ${file}: ${chksum}"
+            return 0
+        else
+            CT_DoLog ERROR "Bad ${alg} digest for ${file}: ${chksum}, expect ${c}"
+            return 1
+        fi
+    done < "${pkgdir}/chksum"
+    CT_DoLog WARN "Downloaded file ${file} reference digest not available"
+    return 0
+}
 
-    # If not allowed to download from the Internet, don't
+# Decompress a file to stdout
+CT_ZCat()
+{
+    local file="$1"
+
+    case "${file}" in
+    *.tar.xz)
+        xz -fdc "${file}"
+        ;;
+    *.tar.lzma)
+        xz -fdc --format=lzma "${file}"
+        ;;
+    *.tar.lz)
+        lzip -fdc "${file}"
+        ;;
+    *.tar.bz2)
+        bzip2 -dc "${file}"
+        ;;
+    *.tar.gz|*.tgz)
+        gzip -dc "${file}"
+        ;;
+    *.tar)
+        cat "${file}"
+        ;;
+    *)
+        CT_Abort "Unsupported archive file name '${file}'"
+    esac
+}
+
+# Verify the file against a detached signature.
+# Fetched from the URL, or obtained from the package directory.
+# Usage: CT_DoVerifySignature <local-file-path> <URL-used-for-download> <signature-format> <save-subdirectory>
+CT_DoVerifySignature()
+{
+    local path="$1"
+    local file="${path##*/}"
+    local dir="${path%/*}"
+    local url="$2"
+    local urldir="${url%/*}"
+    local format="$3"
+    local method="${format%/*}"
+    local ext="${format#*/}"
+    local save_subdir="$4"
+    local sigfile
+    local cat
+
+    CT_DoLog EXTRA "Verifying detached signature for '${file}'"
+    case "${method}" in
+    packed)
+        # Typical case: release is packed, then signed
+        sigfile="${file}"
+        cat=cat
+        ;;
+    unpacked)
+        # Linux kernel: uncompressed tarball is signed, them compressed by various methods
+        case "${file}" in
+        *.tar.*)
+            sigfile="${file%.tar.*}.tar"
+            cat=CT_ZCat
+            ;;
+        *)
+            CT_Abort "'unpacked' signature method only supported for tar archives"
+            ;;
+        esac
+        ;;
+    *)
+        CT_Abort "Unsupported signature method ${method}"
+        ;;
+    esac
+
+    # No recursion, as we don't pass signature_format argument
+    if ! CT_DoGetFile "${urldir}/${sigfile}${ext}"; then
+        CT_DoLog WARN "Failed to download the signature '${sigfile}${ext}'"
+        return 1
+    fi
+
+    CT_Pushd "${dir}"
+    if ! ${cat} "${file}" | CT_DoExecLog ALL gpg --verify "${sigfile}${ext}" -; then
+        # Remove the signature so it's re-downloaded next time
+        CT_DoExecLog ALL rm "${sigfile}${ext}"
+        CT_Popd
+        return 1
+    fi
+    CT_Popd
+
+    # If we get here, verification succeeded.
+    if ! CT_SaveLocal "${CT_TARBALLS_DIR}/${sigfile}${ext}" "${save_subdir}"; then
+        CT_Popd
+        return 1
+    fi
+
+    return 0
+}
+
+# Download the file from one of the URLs passed as argument
+CT_GetFile()
+{
+    local -a argnames=(
+        package             # Name of the package
+        pkg_dir             # Directory with package's auxiliary files
+        dir_name            # Package's directory name in downloads dir
+        basename            # Base name of file/archive
+        extensions          # Extension(s) for the file/archive
+        digest              # If 'y', verify the digest
+        signature_format    # Format of the signature
+        mirrors             # Mirrors to download from
+    )
+    local dl_dir
+    local -a URLS
+    local ext url
+
+    for arg in "${argnames[@]/%/=}" "$@"; do
+        eval "local ${arg//[[:space:]]/\\ }"
+    done
+
+    CT_TestOrAbort "Internal error: dir_name not set" -n "${dir_name}"
+    dl_dir="${CT_LOCAL_TARBALLS_DIR:+${CT_LOCAL_TARBALLS_DIR}${CT_TARBALLS_BUILDROOT_LAYOUT:+/${dir_name}}}"
+
+    # Does any of the requested files exist localy?
+    for ext in ${extensions}; do
+        # Do we already have it in *our* tarballs dir?
+        if [ -r "${CT_TARBALLS_DIR}/${basename}${ext}" ]; then
+            CT_DoLog DEBUG "Already have '${CT_TARBALLS_DIR}/${basename}${ext}'"
+            return 0
+        fi
+
+        if [ "${CT_FORCE_DOWNLOAD}" != "y" ]; then
+            if [ -n "${dl_dir}" -a -r "${dl_dir}/${basename}${ext}" ]; then
+                CT_DoLog DEBUG "Got '${basename}' from local storage"
+                CT_DoExecLog ALL ln -s "${dl_dir}/${basename}${ext}" \
+                        "${CT_TARBALLS_DIR}/${basename}${ext}"
+                return 0
+            elif [ -n "${CT_LOCAL_TARBALLS_DIR}" -a -r "${CT_LOCAL_TARBALLS_DIR}/${basename}${ext}" ]; then
+                # Only different if we're using new buildroot layout
+                CT_DoLog DEBUG "Got '${basename}' from local storage"
+                CT_DoLog INFO "Moving the ${basename}${ext} into ${dir_name}/${basename}${ext}"
+                if [ ! -d "${dl_dir}" ]; then
+                    CT_DoExecLog ALL mkdir -p "${dl_dir}"
+                fi
+                CT_DoExecLog ALL mv "${CT_LOCAL_TARBALLS_DIR}/${basename}${ext}" "${dl_dir}/${basename}${ext}"
+                CT_DoExecLog ALL ln -s "${dl_dir}/${basename}${ext}" \
+                        "${CT_TARBALLS_DIR}/${basename}${ext}"
+                return 0
+            fi
+        fi
+    done
+
+    # No, it does not...  If not allowed to download from the Internet, don't.
     if [ "${CT_FORBID_DOWNLOAD}" = "y" ]; then
-        CT_DoLog DEBUG "Not allowed to download from the Internet, aborting ${file} download"
+        CT_DoLog DEBUG "Not allowed to download from the Internet, aborting ${basename} download"
         return 1
     fi
 
     # Try to retrieve the file
-    CT_DoLog EXTRA "Retrieving '${file}'"
+    CT_DoLog EXTRA "Retrieving '${basename}'"
 
     # Add URLs on the LAN mirror
     if [ "${CT_USE_MIRROR}" = "y" ]; then
         CT_TestOrAbort "Please set the mirror base URL" -n "${CT_MIRROR_BASE_URL}"
-        URLS+=( "${CT_MIRROR_BASE_URL}/${file%-*}" )
+        if [ -n "${package}" ]; then
+            URLS+=( "${CT_MIRROR_BASE_URL}/${package}" )
+        fi
         URLS+=( "${CT_MIRROR_BASE_URL}" )
     fi
 
     if [ "${CT_FORCE_MIRROR}" != "y" ]; then
-        URLS+=( "${@}" )
+        URLS+=( ${mirrors} )
     fi
 
     # Scan all URLs in turn, and try to grab a tarball from there
-    # Do *not* try git trees (ext=/.git), this is handled in a specific
-    # wrapper, below
-    for ext in ${first_ext} $(CT_DoListTarballExt) ''; do
+    for ext in ${extensions}; do
         # Try all urls in turn
         for url in "${URLS[@]}"; do
             [ -n "${url}" ] || continue
-            CT_DoLog DEBUG "Trying '${url}/${file}${ext}'"
-            CT_DoGetFile "${url}/${file}${ext}"
-            if [ -f "${CT_TARBALLS_DIR}/${file}${ext}" ]; then
-                CT_DoLog DEBUG "Got '${file}' from the Internet"
-                CT_SaveLocal "${CT_TARBALLS_DIR}/${file}${ext}"
+            if [ "${url}" = "-unknown-" ]; then
+                CT_Abort "Don't know how to download ${basename}"
+            fi
+            if CT_DoGetFile "${url}/${basename}${ext}"; then
+                if [ -n "${digest}" -a -n "${pkg_dir}" ] && ! CT_DoVerifyDigest \
+                            "${CT_TARBALLS_DIR}/${basename}${ext}" \
+                            "${CT_LIB_DIR}/packages/${pkg_dir}"; then
+                    CT_DoLog ERROR "Digest verification failed; removing the download"
+                    CT_DoExecLog ALL rm "${CT_TARBALLS_DIR}/${basename}${ext}"
+                    return 1
+                fi
+                if [ -n "${signature_format}" ] && ! CT_DoVerifySignature \
+                            "${CT_TARBALLS_DIR}/${basename}${ext}" \
+                            "${url}/${basename}${ext}" \
+                            "${signature_format}"; then
+                    CT_DoLog ERROR "Signature verification failed; removing the download"
+                    CT_DoExecLog ALL rm "${CT_TARBALLS_DIR}/${basename}${ext}"
+                    return 1
+                fi
+                if ! CT_SaveLocal "${CT_TARBALLS_DIR}/${basename}${ext}" "${dir_name}"; then
+                    return 1
+                fi
                 return 0
             fi
         done
     done
 
-    # Just return error, someone may want to catch and handle the error
-    # (eg. glibc add-ons can be missing).
+    # Just return error: CT_DoFetch will check it and will handle it appropriately.
     return 1
 }
 
-# Get a component from Linaro archives.
-# Usage: CT_GetLinaro <component> <version>
-CT_GetLinaro() {
-    local comp="$1"
-    local version="$2"
-    local linaro_version
-    local yyyymm_p
-    local yymm
-    local base
-
-    case "${version}" in
-        linaro-*)
-            linaro_version="${version#linaro-}"
-            ;;
-        *)
-            CT_Abort "Version ${version} is not a Linaro package"
-            ;;
-    esac
-
-    # Recent releases reside in top of the directory tree; older releases
-    # are moved into the archive. Subdirectories are named differently
-    # in archive!
-    # In archive, some URLs also contain base component version
-    # (e.g. "gcc-linaro/4.9") while some do not (e.g. just "newlib-linaro").
-    base="${linaro_version%%-*}"
-    # Strip base version, first two digits of the year and optional patchlevel
-    yymm="${linaro_version#*-??}"
-    yymm="${yymm%-*}"
-    CT_GetFile "${comp}-${version}" \
-        "https://releases.linaro.org/components/toolchain/${comp}-linaro/${linaro_version}" \
-        "https://releases.linaro.org/archive/${yymm}/components/toolchain/${comp}-linaro/${base}" \
-        "https://releases.linaro.org/archive/${yymm}/components/toolchain/${comp}-linaro"
-}
-
-# Checkout from CVS, and build the associated tarball
-# The tarball will be called ${basename}.tar.bz2
-# Prerequisite: either the server does not require password,
-# or the user must already be logged in.
-# 'tag' is the tag to retrieve. Must be specified, but can be empty.
-# If dirname is specified, then module will be renamed to dirname
-# prior to building the tarball.
-# Usage: CT_GetCVS <basename> <url> <module> <tag> [dirname[=subdir]]
-# Note: if '=subdir' is given, then it is used instead of 'module'.
-CT_GetCVS() {
-    local basename="$1"
-    local uri="$2"
-    local module="$3"
-    local tag="${4:+-r ${4}}"
-    local dirname="$5"
-    local tmp_dir
-
-    # First try locally, then the mirror
-    if CT_GetFile "${basename}"; then
-        # Got it! Return early! :-)
-        return 0
-    fi
-
-    if [ "${CT_FORBID_DOWNLOAD}" = "y" ]; then
-        CT_DoLog WARN "Downloads forbidden, not trying cvs retrieval"
-        return 1
-    fi
-
-    CT_MktempDir tmp_dir
-    CT_Pushd "${tmp_dir}"
-
-    CT_DoExecLog ALL cvs -z 9 -d "${uri}" co -P ${tag} "${module}"
-    if [ -n "${dirname}" ]; then
-        case "${dirname}" in
-            *=*)
-                CT_DoExecLog DEBUG mv "${dirname#*=}" "${dirname%%=*}"
-                CT_DoExecLog ALL tar cjf "${CT_TARBALLS_DIR}/${basename}.tar.bz2" "${dirname%%=*}"
-                ;;
-            *)
-                CT_DoExecLog ALL mv "${module}" "${dirname}"
-                CT_DoExecLog ALL tar cjf "${CT_TARBALLS_DIR}/${basename}.tar.bz2" "${dirname:-${module}}"
-                ;;
-        esac
-    fi
-    CT_SaveLocal "${CT_TARBALLS_DIR}/${basename}.tar.bz2"
-
-    CT_Popd
-    CT_DoExecLog ALL rm -rf "${tmp_dir}"
-}
-
-# Check out from SVN, and build the associated tarball
-# The tarball will be called ${basename}.tar.bz2
-# Prerequisite: either the server does not require password,
-# or the user must already be logged in.
-# 'rev' is the revision to retrieve
-# Usage: CT_GetSVN <basename> <url> [rev]
-CT_GetSVN() {
-    local basename="$1"
-    local uri="$2"
-    local rev="$3"
-
-    # First try locally, then the mirror
-    if CT_GetFile "${basename}"; then
-        # Got it! Return early! :-)
-        return 0
-    fi
-
-    if [ "${CT_FORBID_DOWNLOAD}" = "y" ]; then
-        CT_DoLog WARN "Downloads forbidden, not trying svn retrieval"
-        return 1
-    fi
-
-    CT_MktempDir tmp_dir
-    CT_Pushd "${tmp_dir}"
-
-    if ! CT_DoExecLog ALL svn export ${rev:+-r ${rev}} "${uri}" "${basename}"; then
-        CT_DoLog WARN "Could not retrieve '${basename}'"
-        return 1
-    fi
-    CT_DoExecLog ALL tar cjf "${CT_TARBALLS_DIR}/${basename}.tar.bz2" "${basename}"
-    CT_SaveLocal "${CT_TARBALLS_DIR}/${basename}.tar.bz2"
-
-    CT_Popd
-    CT_DoExecLog ALL rm -rf "${tmp_dir}"
-}
-
-# Clone a git tree
-# Tries the given URLs in turn until one can get cloned. No tarball will be created.
-# Prerequisites: either the server does not require password,
-# or the user has already taken any action to authenticate to the server.
-# The cloned tree will *not* be stored in the local tarballs dir!
-# cset_or_ref can be a branch or tag, if specified as 'ref=name'
-# In this case, 'git ls-remote' is used to get the sha1 and can also
-# be used to get a list valid refs (e.g. HEAD, refs/heads/master, refs/tags/v3.3.0)
-# Usage: CT_GetGit <basename> <cset_or_ref> <url> <out_cset>
-CT_GetGit() {
-    local basename="${1}"
-    local cset_or_ref="${2}"
-    local url="${3}"
-    local _out_cset="${4}"
-
-    local ref=$(echo "${cset_or_ref}" | ${sed} -n 's/^ref=\(.*\)/\1/p')
-    if [ -n "$ref" ]; then
-        local matches=$(git ls-remote --exit-code "$url" --refs "${ref}")
-        local result=$?
-        CT_TestAndAbort "Failed to find git ref ${ref} at ${url}" "${result}" != "0"
-        if [ $( echo "$matches" | wc -l) -gt 1 ]; then
-            CT_DoLog WARN "Ambiguous ref ${ref} at ${url}, using first"
-        fi
-        local cset=$(echo "$matches" | head -n1 | cut -c1-6)
-        CT_DoLog DEBUG "ref ${ref} at ${url} has cset of ${cset}"
-    else
-        local cset=${cset_or_ref}
-        CT_DoLog DEBUG "cset ${cset}"
-    fi
-
-    if [ -n "${_out_cset}" ]; then
-        eval ${_out_cset}=\${cset}
-    fi
-
-    local dir="${CT_TARBALLS_DIR}/${basename}-${cset}.git"
-    local file="${basename}-${cset}.tar.gz"
-    local dest="${CT_TARBALLS_DIR}/${file}"
-    local tmp="${CT_TARBALLS_DIR}/${file}.tmp-dl"
-
-    # Do we already have it?
-    if CT_GetLocal "${file}"; then
-        echo ${cset}
-        return 0
-    fi
-    # Nope...
-
-    if [ "${CT_FORBID_DOWNLOAD}" = "y" ]; then
-        CT_DoLog WARN "Downloads forbidden, not trying git retrieval"
-        return 1
-    fi
-
-    # Add URLs on the LAN mirror
-    # We subvert the normal download method, just to look for
-    # looking at the local mirror
-    if CT_GetFile "${basename}-${cset}" .tar.gz; then
-        return 0
-    fi
-
-    CT_DoLog EXTRA "Retrieving '${basename}-${cset}' (git)"
-
-    # Remove potential left-over from a previous run
-    CT_DoExecLog ALL rm -rf "${tmp}.tar.gz" "${tmp}.tar" "${tmp}" "${dir}"
-
-    if CT_DoExecLog ALL git clone "${url}" "${dir}"; then
-        # Yep, cloned OK
-        CT_Pushd "${dir}"
-        CT_DoExecLog ALL git archive --format=tar                       \
-                                     --prefix="${basename}-${cset}/"    \
-                                     -o "${tmp}.tar"                    \
-                                     "${cset}"
-        CT_DoExecLog ALL gzip -9 "${tmp}.tar"
-        CT_DoExecLog ALL mv -f "${tmp}.tar.gz" "${dest}"
-        CT_SaveLocal "${dest}"
-        CT_DoExecLog ALL rm -rf "${tmp}.tar.gz" "${tmp}.tar" "${tmp}" "${dir}"
-        CT_Popd
-        echo ${cset}
-        return 0
-    else
-        # Woops...
-        CT_DoExecLog ALL rm -rf "${dir}"
-        CT_DoLog DEBUG "Could not clone '${basename}'"
-        return 1
-    fi
-}
-
-# Extract a tarball
-# Some tarballs need to be extracted in specific places. Eg.: glibc addons
-# must be extracted in the glibc directory; uCLibc locales must be extracted
-# in the extra/locale sub-directory of uClibc. This is taken into account
-# by the caller, that did a 'cd' into the correct path before calling us
-# and sets nochdir to 'nochdir'.
-# Note also that this function handles the git trees!
-# Usage: CT_Extract [nochdir] <basename> [options]
-# where 'options' are dependent on the source (eg. git branch/tag...)
-CT_Extract() {
-    local nochdir="$1"
-    local basename
-    local ext
-    local -a tar_opts
-
-    if [ "${nochdir}" = "nochdir" ]; then
-        shift
-        nochdir="$(pwd)"
-    else
-        nochdir="${CT_SRC_DIR}"
-    fi
-
-    basename="$1"
-    shift
-
-    # Check if already extracted
-    if [ -e "${CT_SRC_DIR}/.${basename}.extracted" ]; then
-        CT_DoLog DEBUG "Already extracted '${basename}'"
-        return 0
-    fi
-
-    if ! ext="$(CT_GetFileExtension "${basename}")"; then
-	CT_DoLog WARN "'${basename}' not found in '${CT_TARBALLS_DIR}'"
-	return 1
-    fi
-    local full_file="${CT_TARBALLS_DIR}/${basename}${ext}"
-
-    # Check if previously partially extracted
-    if [ -e "${CT_SRC_DIR}/.${basename}.extracting" ]; then
-        CT_DoLog ERROR "The '${basename}' sources were partially extracted."
-        CT_DoLog ERROR "Please remove first:"
-        CT_DoLog ERROR " - the source dir for '${basename}', in '${CT_SRC_DIR}'"
-        CT_DoLog ERROR " - the file '${CT_SRC_DIR}/.${basename}.extracting'"
-        CT_Abort "I'll stop now to avoid any carnage..."
-    fi
-    CT_DoExecLog DEBUG touch "${CT_SRC_DIR}/.${basename}.extracting"
-
-    CT_Pushd "${nochdir}"
-
-    CT_DoLog EXTRA "Extracting '${basename}'"
-    CT_DoExecLog FILE mkdir -p "${basename}"
-    tar_opts=( "--strip-components=1" )
-    tar_opts+=( "-C" "${basename}" )
-    tar_opts+=( "-xv" )
-
-    case "${ext}" in
-        .tar.xz)      xz -fdc "${full_file}" | CT_DoExecLog FILE tar "${tar_opts[@]}" -f -;;
-        .tar.lzma)    xz -fdc "${full_file}" | CT_DoExecLog FILE tar "${tar_opts[@]}" -f -;;
-        .tar.bz2)     bzip2 -dc "${full_file}" | CT_DoExecLog FILE tar "${tar_opts[@]}" -f -;;
-        .tar.gz|.tgz) gzip -dc "${full_file}" | CT_DoExecLog FILE tar "${tar_opts[@]}" -f -;;
-        .tar)         CT_DoExecLog FILE tar "${tar_opts[@]}" -f "${full_file}";;
-        .zip)         CT_DoExecLog FILE unzip "${@}" "${full_file}";;
-        /.git)        CT_ExtractGit "${basename}" "${@}";;
-        *)            CT_DoLog WARN "Don't know how to handle '${basename}${ext}': unknown extension"
-                      return 1
-                      ;;
-    esac
-
-    # Don't mark as being extracted for git
-    case "${ext}" in
-        /.git)  ;;
-        *)      CT_DoExecLog DEBUG touch "${CT_SRC_DIR}/.${basename}.extracted";;
-    esac
-    CT_DoExecLog DEBUG rm -f "${CT_SRC_DIR}/.${basename}.extracting"
-
-    CT_Popd
-}
-
-# Create a working git clone of a local git repository
-# Usage: CT_ExtractGit <basename> [ref]
-# where 'ref' is the reference to use:
-#   the full name of a branch, like "remotes/origin/branch_name"
-#   a date as understandable by git, like "YYYY-MM-DD[ hh[:mm[:ss]]]"
-#   a tag name
-# If 'ref' is not given, the current repository HEAD will be used
-CT_ExtractGit() {
-    local basename="${1}"
-    local ref="${2}"
-    local repo
-    local ref_type
-
-    # pushd now to be able to get git revlist in case ref is a date
-    repo="${CT_TARBALLS_DIR}/${basename}"
-    CT_Pushd "${repo}"
-
-    # What kind of reference is ${ref} ?
-    if [ -z "${ref}" ]; then
-        ref_type=head
-        ref=$(git rev-list -n1 HEAD)
-    elif git tag |{grep} -E "^${ref}$" >/dev/null 2>&1; then
-        ref_type=tag
-    elif git branch -a --no-color |${grep} -E "^. ${ref}$" >/dev/null 2>&1; then
-        ref_type=branch
-    elif date -d "${ref}" >/dev/null 2>&1; then
-        ref_type=date
-        ref=$(git rev-list -n1 --before="${ref}")
-    else
-        CT_Abort "Reference '${ref}' is an incorrect git reference: neither tag, branch nor date"
-    fi
-
-    CT_Popd
-
-    CT_DoExecLog FILE rmdir "${basename}"
-    case "${ref_type}" in
-        branch) CT_DoExecLog FILE git clone -b "${ref}" "${repo}" "${basename}" ;;
-        *)      CT_DoExecLog FILE git clone "${repo}" "${basename}"
-                CT_Pushd "${basename}"
-                CT_DoExecLog FILE git checkout "${ref}"
-                CT_Popd
-                ;;
-    esac
-}
-
-# Patches the specified component
-# See CT_Extract, above, for explanations on 'nochdir'
-# Usage: CT_Patch [nochdir] <packagename> <packageversion>
-# If the package directory is *not* packagename-packageversion, then
-# the caller must cd into the proper directory first, and call us
-# with nochdir
-CT_Patch() {
-    local nochdir="$1"
-    local pkgname
-    local version
-    local pkgdir
-    local base_file
-    local ver_file
-    local d
-    local -a patch_dirs
-    local bundled_patch_dir
-    local local_patch_dir
-    local bundled_exp_patch_dir
-    local local_exp_patch_dir
-
-    if [ "${nochdir}" = "nochdir" ]; then
-        shift
-        pkgname="$1"
-        version="$2"
-        pkgdir="${pkgname}-${version}"
-        nochdir="$(pwd)"
-    else
-        pkgname="$1"
-        version="$2"
-        pkgdir="${pkgname}-${version}"
-        nochdir="${CT_SRC_DIR}/${pkgdir}"
-    fi
-
-    # Check if already patched
-    if [ -e "${CT_SRC_DIR}/.${pkgdir}.patched" ]; then
-        CT_DoLog DEBUG "Already patched '${pkgdir}'"
-        return 0
-    fi
-
-    # Check if already partially patched
-    if [ -e "${CT_SRC_DIR}/.${pkgdir}.patching" ]; then
-        CT_DoLog ERROR "The '${pkgdir}' sources were partially patched."
-        CT_DoLog ERROR "Please remove first:"
-        CT_DoLog ERROR " - the source dir for '${pkgdir}', in '${CT_SRC_DIR}'"
-        CT_DoLog ERROR " - the file '${CT_SRC_DIR}/.${pkgdir}.extracted'"
-        CT_DoLog ERROR " - the file '${CT_SRC_DIR}/.${pkgdir}.patching'"
-        CT_Abort "I'll stop now to avoid any carnage..."
-    fi
-    touch "${CT_SRC_DIR}/.${pkgdir}.patching"
-
-    CT_Pushd "${nochdir}"
-
-    CT_DoLog EXTRA "Patching '${pkgdir}'"
-
-    bundled_patch_dir="${CT_LIB_DIR}/patches/${pkgname}/${version}"
-    bundled_patch_arch_dir="${bundled_patch_dir}/${CT_ARCH}"
-    local_patch_dir="${CT_LOCAL_PATCH_DIR}/${pkgname}/${version}"
-
-    case "${CT_PATCH_ORDER}" in
-        bundled)        patch_dirs=("${bundled_patch_dir}" "${bundled_patch_arch_dir}");;
-        local)          patch_dirs=("${local_patch_dir}");;
-        bundled,local)  patch_dirs=("${bundled_patch_dir}" "${bundled_patch_arch_dir}" "${local_patch_dir}");;
-        local,bundled)  patch_dirs=("${local_patch_dir}" "${bundled_patch_dir}" "${bundled_patch_arch_dir}");;
-        none)           patch_dirs=;;
-    esac
-
-    for d in "${patch_dirs[@]}"; do
-        CT_DoLog DEBUG "Looking for patches in '${d}'..."
-        if [ -n "${d}" -a -d "${d}" ]; then
-            for p in "${d}"/*.patch; do
-                if [ -f "${p}" ]; then
-                    CT_DoExecLog ALL ${patch} --no-backup-if-mismatch -g0 -F1 -p1 -f -i "${p}"
-                fi
-            done
-            if [ "${CT_PATCH_SINGLE}" = "y" ]; then
-                break
-            fi
-        fi
-    done
-
-    if [ "${CT_OVERRIDE_CONFIG_GUESS_SUB}" = "y" ]; then
-        CT_DoLog ALL "Overiding config.guess and config.sub"
-        for cfg in config_guess config_sub; do
-            eval ${cfg}="${CT_LIB_DIR}/scripts/${cfg/_/.}"
-            [ -e "${CT_TOP_DIR}/scripts/${cfg/_/.}" ] && eval ${cfg}="${CT_TOP_DIR}/scripts/${cfg/_/.}"
-            # Can't use CT_DoExecLog because of the '{} \;' to be passed un-mangled to find
-            find . -type f -name "${cfg/_/.}" \
-                -exec chmod -v u+w {} \; \
-                -exec cp -v "${!cfg}" {} \; |CT_DoLog ALL
-        done
-    fi
-
-    CT_DoExecLog DEBUG touch "${CT_SRC_DIR}/.${pkgdir}.patched"
-    CT_DoExecLog DEBUG rm -f "${CT_SRC_DIR}/.${pkgdir}.patching"
-
-    CT_Popd
-}
-
+# TBD these should not be needed if config.sub/guess is a package
 # Two wrappers to call config.(guess|sub) either from CT_TOP_DIR or CT_LIB_DIR.
 # Those from CT_TOP_DIR, if they exist, will be be more recent than those from CT_LIB_DIR.
 CT_DoConfigGuess() {
-    if [ -x "${CT_TOP_DIR}/scripts/config.guess" ]; then
-        "${CT_TOP_DIR}/scripts/config.guess"
+    if [ -r "${CT_TOP_DIR}/scripts/config.guess" ]; then
+        "${CT_CONFIG_SHELL}" "${CT_TOP_DIR}/scripts/config.guess"
     else
-        "${CT_LIB_DIR}/scripts/config.guess"
+        "${CT_CONFIG_SHELL}" "${CT_LIB_DIR}/scripts/config.guess"
     fi
 }
 
 CT_DoConfigSub() {
-    if [ -x "${CT_TOP_DIR}/scripts/config.sub" ]; then
-        "${CT_TOP_DIR}/scripts/config.sub" "$@"
+    if [ -r "${CT_TOP_DIR}/scripts/config.sub" ]; then
+        "${CT_CONFIG_SHELL}" "${CT_TOP_DIR}/scripts/config.sub" "$@"
     else
-        "${CT_LIB_DIR}/scripts/config.sub" "$@"
+        "${CT_CONFIG_SHELL}" "${CT_LIB_DIR}/scripts/config.sub" "$@"
     fi
 }
 
 # Normally, each step is executed in a sub-shell and thus cannot modify the
 # environment for the next step(s). When this is needed, it can do so by
 # invoking this function.
-# Usage: CT_EnvModify VAR VALUE
+# Usage: CT_EnvModify [export] VAR VALUE
 CT_EnvModify() {
-    echo "${1}=\"${2}\"" >> "${CT_BUILD_DIR}/env.modify.sh"
+    local e
+    if [ "$1" = "export" ]; then
+        shift
+        e="export "
+    fi
+    eval "${e}${1}=\"${2}\""
+    echo "${e}${1}=\"${2}\"" >> "${CT_BUILD_DIR}/env.modify.sh"
 }
 
 # Compute the target tuple from what is provided by the user
@@ -1328,22 +1077,32 @@ CT_EnvModify() {
 # sample saving sequence.
 CT_DoBuildTargetTuple() {
     # Set the endianness suffix, and the default endianness gcc option
+    target_endian_eb=
+    target_endian_be=
+    target_endian_el=
+    target_endian_le=
     case "${CT_ARCH_ENDIAN}" in
         big)
             target_endian_eb=eb
             target_endian_be=be
-            target_endian_el=
-            target_endian_le=
             CT_ARCH_ENDIAN_CFLAG="-mbig-endian"
             CT_ARCH_ENDIAN_LDFLAG="-Wl,-EB"
             ;;
         little)
-            target_endian_eb=
-            target_endian_be=
             target_endian_el=el
             target_endian_le=le
             CT_ARCH_ENDIAN_CFLAG="-mlittle-endian"
             CT_ARCH_ENDIAN_LDFLAG="-Wl,-EL"
+            ;;
+        # big,little and little,big do not need to pass the flags;
+        # gcc is expected to be configured for that as default.
+        big,little)
+            target_endian_eb=eb
+            target_endian_be=be
+            ;;
+        little,big)
+            target_endian_el=el
+            target_endian_le=le
             ;;
     esac
 
@@ -1362,23 +1121,24 @@ CT_DoBuildTargetTuple() {
     # Build the default architecture tuple part
     CT_TARGET_ARCH="${CT_ARCH}${CT_ARCH_SUFFIX}"
 
-    # Set defaults for the system part of the tuple. Can be overriden
-    # by architecture-specific values.
+    # Set defaults for the system part of the tuple; only C libraries that
+    # support multiple architectures. Can be overriden by architecture-specific
+    # values.
     case "${CT_LIBC}" in
-        *glibc) CT_TARGET_SYS=gnu;;
-        uClibc) CT_TARGET_SYS=uclibc;;
-        musl)   CT_TARGET_SYS=musl;;
-        avr-libc)
-            # avr-libc only seems to work with the non-canonical "avr" target.
-            CT_TARGET_SKIP_CONFIG_SUB=y
-            CT_TARGET_SYS= # CT_TARGET_SYS must be empty too
-        ;;
-        *)      CT_TARGET_SYS=elf;;
+        glibc)       CT_TARGET_SYS=gnu;;
+        uClibc)      CT_TARGET_SYS=uclibc;;
+        musl)        CT_TARGET_SYS=musl;;
+        bionic)      CT_TARGET_SYS=android;;
+        none|newlib) CT_TARGET_SYS=elf;;
+        *)
+            # Keep empty for the libraries like mingw or avr-libc
+            CT_TARGET_SYS=
+            ;;
     esac
 
     # Set the default values for ARCH, ABI, CPU, TUNE, FPU and FLOAT
     unset CT_ARCH_ARCH_CFLAG CT_ARCH_ABI_CFLAG CT_ARCH_CPU_CFLAG CT_ARCH_TUNE_CFLAG CT_ARCH_FPU_CFLAG CT_ARCH_FLOAT_CFLAG
-    unset CT_ARCH_WITH_ARCH CT_ARCH_WITH_ABI CT_ARCH_WITH_CPU CT_ARCH_WITH_TUNE CT_ARCH_WITH_FPU CT_ARCH_WITH_FLOAT
+    unset CT_ARCH_WITH_ARCH CT_ARCH_WITH_ABI CT_ARCH_WITH_CPU CT_ARCH_WITH_TUNE CT_ARCH_WITH_FPU CT_ARCH_WITH_FLOAT CT_ARCH_WITH_ENDIAN
     [ "${CT_ARCH_ARCH}"     ] && { CT_ARCH_ARCH_CFLAG="-march=${CT_ARCH_ARCH}";  CT_ARCH_WITH_ARCH="--with-arch=${CT_ARCH_ARCH}"; }
     [ "${CT_ARCH_ABI}"      ] && { CT_ARCH_ABI_CFLAG="-mabi=${CT_ARCH_ABI}";     CT_ARCH_WITH_ABI="--with-abi=${CT_ARCH_ABI}";    }
     [ "${CT_ARCH_CPU}"      ] && { CT_ARCH_CPU_CFLAG="-mcpu=${CT_ARCH_CPU}";     CT_ARCH_WITH_CPU="--with-cpu=${CT_ARCH_CPU}";    }
@@ -1400,6 +1160,10 @@ CT_DoBuildTargetTuple() {
             ;;
     esac
 
+    if [ "${CT_ARCH_SUPPORTS_WITH_ENDIAN}" = "y" ]; then
+        CT_ARCH_WITH_ENDIAN="--with-endian=${CT_ARCH_ENDIAN}"
+    fi
+
     # Build the default kernel tuple part
     CT_TARGET_KERNEL="${CT_KERNEL}"
 
@@ -1408,10 +1172,18 @@ CT_DoBuildTargetTuple() {
     CT_DoKernelTupleValues
 
     # Finish the target tuple construction
-    CT_TARGET="${CT_TARGET_ARCH}"
-    CT_TARGET="${CT_TARGET}${CT_TARGET_VENDOR:+-${CT_TARGET_VENDOR}}"
-    CT_TARGET="${CT_TARGET}${CT_TARGET_KERNEL:+-${CT_TARGET_KERNEL}}"
-    CT_TARGET="${CT_TARGET}${CT_TARGET_SYS:+-${CT_TARGET_SYS}}"
+    if [ -z "${CT_OMIT_TARGET_ARCH}" ]; then
+        CT_TARGET="${CT_TARGET_ARCH}"
+    fi
+    if [ -z "${CT_OMIT_TARGET_VENDOR}" -a -n "${CT_TARGET_VENDOR}" ]; then
+        CT_TARGET="${CT_TARGET:+${CT_TARGET}-}${CT_TARGET_VENDOR}"
+    fi
+    if [ -n "${CT_TARGET_KERNEL}" ]; then
+        CT_TARGET="${CT_TARGET:+${CT_TARGET}-}${CT_TARGET_KERNEL}"
+    fi
+    if [ -n "${CT_TARGET_SYS}" ]; then
+        CT_TARGET="${CT_TARGET:+${CT_TARGET}-}${CT_TARGET_SYS}"
+    fi
 
     # Sanity checks
     __sed_alias=""
@@ -1428,6 +1200,12 @@ CT_DoBuildTargetTuple() {
     # Canonicalise it
     if [ "${CT_TARGET_SKIP_CONFIG_SUB}" != "y" ]; then
         CT_TARGET=$(CT_DoConfigSub "${CT_TARGET}")
+
+        if [ -n "${CT_OMIT_TARGET_VENDOR}" ]; then
+            # config.sub always returns a 3- or 4-part tuple, with vendor
+            # always being the 2nd part.
+            CT_TARGET="${CT_TARGET%%-*}-${CT_TARGET#*-*-}"
+        fi
     fi
 
     # Prepare the target CFLAGS
@@ -1452,11 +1230,14 @@ CT_DoBuildTargetTuple() {
     # Instead, save them into a different variable here. Then, after the first
     # core pass, we'll know which of them vary with multilibs (i.e. must be
     # filtered out).
-    if [ "${CT_MULTILIB}" = "y" ]; then
+    if [ -n "${CT_MULTILIB}" ]; then
         CT_ARCH_TARGET_CFLAGS_MULTILIB="${CT_ARCH_TARGET_CFLAGS}"
         CT_ARCH_TARGET_CFLAGS=
         CT_ARCH_TARGET_LDFLAGS_MULTILIB="${CT_ARCH_TARGET_LDFLAGS}"
         CT_ARCH_TARGET_LDFLAGS=
+    else
+        CT_ALL_TARGET_CFLAGS="${CT_ARCH_TARGET_CFLAGS} ${CT_TARGET_CFLAGS}"
+        CT_ALL_TARGET_LDFLAGS="${CT_ARCH_TARGET_LDFLAGS} ${CT_TARGET_LDFLAGS}"
     fi
 }
 
@@ -1468,6 +1249,30 @@ CT_DoPause() {
     CT_DoLog INFO "${message}"
     read -p "Press 'Enter' to continue, or Ctrl-C to stop..." foo >&6
     return 0
+}
+
+# This function sets up trapping export/unset operations so that saving/restoring
+# the state can restore status of environment exactly.
+CT_TrapEnvExport()
+{
+    unset()
+    {
+        eval "builtin unset $*"
+        CT_ENVVAR_UNSET="${CT_ENVVAR_UNSET} $*"
+    }
+
+    export()
+    {
+        local v
+
+        for v in "$@"; do
+            eval "builtin export \"${v}\""
+            case "${CT_ENVVAR_EXPORTED} " in
+                *" ${v%%=*} "*) continue;;
+            esac
+            CT_ENVVAR_EXPORTED="${CT_ENVVAR_EXPORTED} ${v%%=*}"
+        done
+    }
 }
 
 # This function creates a tarball of the specified directory, but
@@ -1531,26 +1336,35 @@ CT_DoSaveState() {
 	[ "${CT_DEBUG_CT_SAVE_STEPS}" = "y" ] || return 0
     local state_name="$1"
     local state_dir="${CT_STATE_DIR}/${state_name}"
+    local v
 
     CT_DoLog INFO "Saving state to restart at step '${state_name}'..."
 
     rm -rf "${state_dir}"
     mkdir -p "${state_dir}"
 
+    # Save only environment variables, not functions.
+    # Limit saving to our variables (CT_*) and exported variables.
+    # Also unset variables that have been removed from the environment.
+    # This generated script will be sourced from a function, so make
+    # all the definitions global by adding -g. Hope we don't have
+    # a multi-line variable that has a line starting with "declare"
+    # (or we'll need to run sed on each variable separately, only on
+    # the first line of it).
     CT_DoLog STATE "  Saving environment and aliases"
-    # We must omit shell functions, and some specific bash variables
-    # that break when restoring the environment, later. We could do
-    # all the processing in the awk script, but a sed is easier...
-    set |${awk} '
-              BEGIN { _p = 1; }
-              $0~/^[^ ]+ \(\)/ { _p = 0; }
-              _p == 1
-              $0 == "}" { _p = 1; }
-              ' |${sed} -r -e '/^BASH_(ARGC|ARGV|LINENO|SOURCE|VERSINFO)=/d;
-                           /^(UID|EUID)=/d;
-                           /^(FUNCNAME|GROUPS|PPID|SHELLOPTS)=/d;' >"${state_dir}/env.sh"
+    {
+        for v in "${!CT_@}" ${CT_ENVVAR_EXPORTED}; do
+            # Check if it is still set
+            [ -n "${!v+set}" ] && declare -p "${v}"
+        done | ${sed} 's/^declare /declare -g /'
+        echo "builtin unset ${CT_ENVVAR_UNSET}"
+    } >"${state_dir}/env.sh"
+
+    # Save .config to check it hasn't changed when resuming.
+    CT_DoExecLog STATE cp ".config" "${state_dir}/config"
 
     CT_DoTarballIfExists "${CT_BUILDTOOLS_PREFIX_DIR}" "${state_dir}/buildtools_dir"
+    CT_DoTarballIfExists "${CT_SRC_DIR}" "${state_dir}/src_dir"
     CT_DoTarballIfExists "${CT_PREFIX_DIR}" "${state_dir}/prefix_dir" --exclude '*.log'
 
     CT_DoLog STATE "  Saving log file"
@@ -1571,10 +1385,14 @@ CT_DoLoadState(){
     local old_STOP="${CT_STOP}"
 
     CT_TestOrAbort "The previous build did not reach the point where it could be restarted at '${CT_RESTART}'" -d "${state_dir}"
+    if ! cmp ".config" "${state_dir}/config" >/dev/null 2>&1; then
+        CT_Abort "The configuration file has changed between two runs"
+    fi
 
     CT_DoLog INFO "Restoring state at step '${state_name}', as requested."
 
     CT_DoExtractTarballIfExists "${state_dir}/prefix_dir" "${CT_PREFIX_DIR}"
+    CT_DoExtractTarballIfExists "${state_dir}/src_dir" "${CT_SRC_DIR}"
     CT_DoExtractTarballIfExists "${state_dir}/buildtools_dir" "${CT_BUILDTOOLS_PREFIX_DIR}"
 
     # Restore the environment, discarding any error message
@@ -1585,7 +1403,6 @@ CT_DoLoadState(){
     # Restore the new RESTART and STOP steps
     CT_RESTART="${old_RESTART}"
     CT_STOP="${old_STOP}"
-    unset old_stop old_restart
 
     CT_DoLog STATE "  Restoring log file"
     CT_LogDisable
@@ -1606,6 +1423,7 @@ CT_KconfigSetOption() {
     local value="$2"
     local file="$3"
 
+    CT_DoLog DEBUG "${file}: set ${option}=${value}"
     ${grep} -E -q "^${option}=.*" "${file}" && \
         ${sed} -i -r -e "s;^${option}=.*$;${option}=${value};" "${file}" || \
     ${grep} -E -q "^# ${option} is not set$" "${file}" && \
@@ -1628,6 +1446,7 @@ CT_KconfigDisableOption() {
     local option="${1}"
     local file="${2}"
 
+    CT_DoLog DEBUG "${file}: disable ${option}"
     ${grep} -E -q "^# ${option} is not set$" "${file}" || \
     ${grep} -E -q "^${option}=.*$" "${file}" && \
         ${sed} -i -r -e "s;^${option}=.*$;# ${option} is not set;" "${file}" || \
@@ -1641,6 +1460,7 @@ CT_KconfigDeleteOption() {
     local option="${1}"
     local file="${2}"
 
+    CT_DoLog DEBUG "${file}: delete ${option}"
     ${grep} -E -q "^# ${option} is not set$" "${file}" && \
         ${sed} -i -r -e "/^# ${option} is not set$/d" "${file}" || \
     ${grep} -E -q "^${option}=.*$" "${file}" && \
@@ -1668,6 +1488,7 @@ CT_IterateMultilibs() {
     local multi_dir multi_os_dir multi_os_dir_gcc multi_root multi_flags multi_index multi_target
     local root_suffix
     local dir_postfix
+    local v
 
     # Name used internally below
     if [ "${prefix}" = "sysroot-check" ]; then
@@ -1759,6 +1580,11 @@ CT_IterateMultilibs() {
         dir_postfix=_${multi_dir//\//_}
         dir_postfix=${dir_postfix%_.}
         CT_mkdir_pushd "${prefix}${dir_postfix}"
+        CT_DoLog DEBUG "Multilib iterator: call function '${func}' in '${prefix}${dir_postfix}'"
+        for v in multi_dir multi_os_dir multi_os_dir_gcc multi_flags multi_root multi_target multi_index; do
+            CT_DoLog DEBUG "  ${v}=${!v}"
+        done
+
         $func multi_dir="${multi_dir}"               \
               multi_os_dir="${multi_os_dir}"         \
               multi_os_dir_gcc="${multi_os_dir_gcc}" \
@@ -1915,4 +1741,768 @@ CT_MultilibFixupLDSO()
     CT_IterateMultilibs CT__FixupLDSO ldso_fixup
     CT_Popd
     CT_EndStep
+}
+
+# List the download mirrors. Usage:
+#   CT_Mirrors ORGANIZATION PROJECT [...]
+# Important: this function should not call CT_Abort. Instead, print a special string,
+# -unknown-, to indicate that a certain combination of ORGANIZATION/PROJECT is not handled.
+# The reason is that this function is evaluated when config file is loaded - before ct-ng
+# determines if it needs to download anything at all. On the other hand, if a component
+# comes from a local source directory, it may have a version like "very new" or "very old"
+# which will confuse, for example, Linux mirror selection below.
+CT_Mirrors()
+{
+    local org="${1}"
+    local project="${2}"
+
+    case "${org}" in
+    GNU)
+        echo "https://ftpmirror.gnu.org/gnu/${project}"
+        echo "http://ftpmirror.gnu.org/gnu/${project}"
+        echo "https://ftp.gnu.org/gnu/${project}"
+        echo "http://ftp.gnu.org/gnu/${project}"
+        echo "ftp://ftp.gnu.org/gnu/${project}"
+        ;;
+    sourceware)
+        echo "ftp://sourceware.org/pub/${project}"
+        echo "http://mirrors.kernel.org/sourceware/${project}"
+        echo "http://gcc.gnu.org/pub/${project}"
+        ;;
+    Linaro)
+        local version="${3}"
+        local base yymm
+        base="${version%%-*}"
+        yymm="${version##*-??}"
+        yymm="${yymm%%-*}"
+        echo "https://releases.linaro.org/components/toolchain/${project}-linaro/${version}"
+        echo "https://releases.linaro.org/archive/${yymm}/components/toolchain/${project}-linaro/${base}"
+        echo "https://releases.linaro.org/archive/${yymm}/components/toolchain/${project}-linaro"
+        ;;
+    kernel.org)
+        # TBD move to linux.sh and dtc.sh?
+        case "${project}" in
+        linux)
+            local version="${CT_LINUX_VERSION}"
+            case "${version}" in
+            '')
+                # Ignore, this happens before .config is fully evaluated
+                ;;
+            [34].*)
+                echo "http://www.kernel.org/pub/linux/kernel/v${version%%.*}.x"
+                ;;
+            2.6.*)
+                echo "http://www.kernel.org/pub/linux/kernel/v2.6"
+                case "${version}" in
+                2.6.*.*)
+                    echo "http://www.kernel.org/pub/linux/kernel/v2.6/longterm"
+                    echo "http://www.kernel.org/pub/linux/kernel/v2.6/longterm/v${version%.*}"
+                    ;;
+                esac
+                ;;
+            *)
+                echo "-unknown-"
+                ;;
+            esac
+            ;;
+        dtc)
+            echo "https://mirrors.edge.kernel.org/pub/software/utils/dtc"
+            ;;
+        *)
+            echo "-unknown-"
+            ;;
+        esac
+        ;;
+    *)
+        echo "-unknown-"
+        ;;
+    esac
+}
+
+# Get most recent version for CVS check-out.
+# CVS does not have a repository-wide identifier for a commit, so we must
+# use date. Variables are set by CT_PackageRun
+CT_GetVersion_cvs()
+{
+    # If date is not given, use current. Otherwise, check if format is correct.
+    # We don't support fancy CVS specifications like "1 day ago", as we'll need
+    # to convert them to some stable representation like 20170617231304.
+    if [ -z "${devel_revision}" ]; then
+        devel_revision=`LANG=C TZ=UTC date '+%Y/%m/%d %H:%M:%S'`
+    else
+        case "${devel_revision}" in
+        [12][0-9][0-9][0-9]/[01][0-9]/[0-3][0-9]\ [0-2][0-9]:[0-5][0-9]:[0-5][0-9])
+            ;;
+        *)
+            CT_Abort "${pkg_name}: invalid date format ${devel_revision}"
+            ;;
+        esac
+    fi
+    unique_id="${devel_branch:-trunk}-${devel_revision//[^0-9]/}"
+}
+
+# Check out sources from CVS. Variables are set by CT_PackageRun.
+CT_Download_cvs()
+{
+    local pserver="${devel_url%% *}"
+    local module="${devel_url##* }"
+
+    # CVS has no name for "main" branch, so use -r only if non-default
+    # TBD try -'d ${basename}', with/without -N
+    CT_DoExecLog ALL cvs -z 9 -d "${pserver}" co -P ${devel_branch:+-r ${devel_branch}} \
+            -D "${devel_revision} UTC" "${module}"
+    if [ "${module}" != "${pkg_name}" ]; then
+        CT_DoExecLog ALL mv "${module}" "${pkg_name}"
+    fi
+}
+
+# Find the most recent version from Subversion.
+CT_GetVersion_svn()
+{
+    devel_branch="${devel_branch:-/trunk}"
+
+    # If revision is not given, find the most recent
+    if [ -z "${devel_revision}" ]; then
+        devel_revision=`svn info "${devel_url}${devel_branch}" | sed -n 's/^Last Changed Rev: //p'`
+    fi
+
+    # Construct unique ID from branch/revision
+    unique_id="${devel_branch//\//_}"
+    unique_id="${unique_id#_}"
+    unique_id="${unique_id%_}"
+    unique_id="${unique_id}-${devel_revision}"
+}
+
+# Retrieve sources from Subversion.
+CT_Download_svn()
+{
+    CT_DoExecLog ALL svn export -r "${devel_revision}" "${devel_url}${devel_branch}" "${pkg_name}"
+}
+
+# Find the most recent version from Mercurial.
+CT_GetVersion_hg()
+{
+    if [ -n "${devel_branch}" -a -n "${devel_revision}" ]; then
+        CT_Abort "${pkg_name}: cannot specify both branch and changeset for Mercurial"
+    fi
+
+    # Mercurial cannot query remote branches except the default, so we'll have
+    # to clone if cset is not known and a branch is given.
+    if [ -z "${devel_revision}" ]; then
+        if [ -z "${devel_branch}" ]; then
+            devel_revision=`hg identify "${devel_url}"`
+        else
+            CT_DoLog WARN "${pkg_name}: Mercurial cannot query non-default branch, will clone"
+            devel_revision="to.be.determined"
+        fi
+    fi
+    unique_id="${devel_revision}"
+}
+
+# Retrieve sources from Mercurial.
+CT_Download_hg()
+{
+    CT_DoExecLog ALL hg clone "${devel_url}" "${pkg_name}"
+    CT_Pushd "${pkg_name}"
+    if [ -n "${devel_branch}" ]; then
+        CT_DoExecLog ALL hg update "${devel_branch}"
+    fi
+    if [ "${devel_revision}" = "to.be.determined" ]; then
+        # Report what we found out (as common message lacks the revision)
+        devel_revision=`hg identify -i`
+        unique_id="${devel_revision}"
+        CT_DoLog EXTRA "Retrieved revision ${devel_revision}"
+    else
+        CT_DoExecLog ALL hg update "${devel_revision}"
+    fi
+    CT_DoExecLog ALL rm -rf .hg
+    CT_Popd
+}
+
+# Get the most recent version from Git.
+CT_GetVersion_git()
+{
+    if [ -n "${devel_branch}" -a -n "${devel_revision}" ]; then
+        CT_Abort "${pkg_name}: cannot specify both branch and changeset for Git"
+    fi
+
+    # Do not modify devel_branch so that we can check if it has been set by user
+    # in CT_Download_git.
+    local branch="${devel_branch:-master}"
+
+    if [ -z "${devel_revision}" ]; then
+        local matches=`git ls-remote --exit-code "${devel_url}" --refs "${branch}" \
+            || echo "not found"`
+        local best using ref
+
+        # Cannot test $?, setting a trap on ERR prevents bash from returning the
+        # status code.
+        if [ "${matches}" = "not found" ]; then
+            CT_Abort "Failed to find git ref ${branch} at ${devel_url}"
+        fi
+        if [ `echo "${matches}" | wc -l` -gt 1 ]; then
+            if echo "${matches}" | grep '[[:space:]]\(refs/heads/\)\?'"${branch}\$" >/dev/null; then
+                # Try exact match, or prepended with "refs/heads". Some projects (e.g. binutils)
+                # have refs/original/refs/heads/master as well as refs/heads/master, and
+                # `git ls-remote refs/heads/master` prints both.
+                best=`echo "${matches}" | grep '[[:space:]]\(refs/heads/\)\?'"${branch}\$"`
+                using="best match"
+            else
+                best=`echo "${matches}" | head -n1`
+                using="first"
+            fi
+            ref=`echo "${best}" | sed 's/.*[[:space:]]//'`
+            CT_DoLog WARN "Ambiguous ref ${branch} at ${devel_url}, using ${using} (${ref})"
+        else
+            best="${matches}"
+        fi
+        # Similarly, do not modify the devel_revision, we'll need to know if it
+        # has been set by the user in CT_Download_git.
+        unique_id=`echo "${best}" | cut -c1-8`
+        CT_DoLog DEBUG "ref ${branch} at ${devel_url} has cset of ${unique_id}"
+    else
+        unique_id=`echo "${devel_revision}" | cut -c1-8`
+    fi
+}
+
+# Retrieve sources from Git.
+CT_Download_git()
+{
+    local new_unique_id fetched=n shallow_id
+
+    # Some of these operations are part of a `git clone`, but fetching a specific commit
+    # (if it is supported by the server) is not expressable as a `git clone`.
+    CT_mkdir_pushd "${pkg_name}"
+    CT_DoExecLog ALL git init
+    CT_DoExecLog ALL git remote add origin "${devel_url}"
+
+    if [ -z "${devel_revision}" ]; then
+        # Configuration didn't care about a specific commit; we'll use the most recent
+        # commit on the branch and will update the unique_id (and warn the user) if it
+        # differs from what we've previously determined.
+        shallow_id="${devel_branch:-master}"
+    else
+        local tmp=`echo "${devel_revision}" | sed 's/^[0-9a-z]\{40\}//'`
+
+        if [ -z "${tmp}" ]; then
+            shallow_id="${devel_revision}"
+        else
+            CT_DoLog WARN "Git only allows full 40-character SHA-1 hashes to identify a commit for shallow clone."
+        fi
+    fi
+
+    if [ -n "${shallow_id}" ]; then
+        if CT_DoExecLog ALL git fetch --quiet --depth 1 origin "${shallow_id}"; then
+            CT_DoExecLog ALL git checkout --quiet FETCH_HEAD --
+        else
+            # Git 2.15 and newer (which must be the case on both the client and the server)
+            # allows fetching a single commit so long as the server is configured
+            # to allow it (by having uploadpack.allowReachableSHA1InWant=true set
+            # in its config).
+            CT_DoLog WARN "Shallow clone failed (likely disallowed on the server)."
+            shallow_id=
+        fi
+    fi
+
+    if [ -z "${shallow_id}" ]; then
+        # In this case, we already determined the changeset we need
+        CT_DoLog WARN "Falling back to full clone; may take some time..."
+        CT_DoExecLog ALL git fetch --quiet origin
+        CT_DoExecLog ALL git checkout --quiet "${unique_id}" --
+    fi
+
+    new_unique_id=`git rev-parse HEAD | cut -c1-8`
+    if [ "${new_unique_id}" != "${unique_id}" ]; then
+        CT_DoLog EXTRA "Revision being fetched changed to ${new_unique_id}; source repository had more revisions pushed?"
+        unique_id="${new_unique_id}"
+    fi
+
+    CT_DoExecLog ALL rm -rf .git
+    CT_Popd
+}
+
+# Helper: run another action after setting local variables
+CT_PackageRun()
+{
+    local sym="${1}"
+    local run="${2}"
+    local src_dir="/unknown-src-dir"
+    local v
+
+    # Get rid of our arguments
+    shift 2
+
+    # Variables that are per-project
+    for v in use dir_name; do
+        eval "local ${v}=\${CT_${sym}_${v^^}}"
+    done
+
+    # If $use is not set, we only have one fork to handle
+    use="${use:-${sym}}"
+
+    # Variables that are per-fork
+    for v in basename pkg_name version pkg_dir \
+            src_release mirrors archive_filename archive_dirname archive_formats signature_format \
+            src_devel devel_vcs devel_url devel_branch devel_revision devel_subdir devel_bootstrap \
+            src_custom custom_location patch_order; do
+        eval "CT_DoLog DEBUG \"Package iterator: set ${v}='\${CT_${use}_${v^^}}'\""
+        eval "local ${v}=\${CT_${use}_${v^^}}"
+    done
+
+    if [ -z "${pkg_name}" ]; then
+        CT_Abort "Internal ct-ng error: '${sym}' not defined, please report a bug"
+    fi
+
+    for v in archive_filename archive_dirname; do
+        # kconfig and shell have different quoting rules, so it seems impossible to make
+        # kconfig quote '$' properly for eval (i.e. not have it expanded when loading the
+        # .config). Therefore, use '@' instead of '$' in kconfig files and substitute it
+        # here for select variables.
+        eval "eval ${v}=\${${v}//@/$}"
+    done
+
+    CT_DoLog DEBUG "Package iterator: run ${run} $*"
+    ${run} "$@"
+
+    # Save certain variables that may be modified by the callback.
+    # Fetching the sources is run in the main process, so no need to
+    # use CT_EnvModify.
+    for v in devel_branch devel_revision basename src_dir pkg_dir; do
+        eval "[ \"\${${v}}\" != \"\${CT_${use}_${v^^}}\" ] || continue"
+        eval "CT_${use}_${v^^}=\${${v}}"
+        eval "CT_DoLog DEBUG \"Package iterator: override CT_${use}_${v^^}=\${CT_${use}_${v^^}}\""
+    done
+}
+
+# Closure for fetching the sources
+CT_DoFetch()
+{
+    local tmp_dir
+    local extensions e a
+
+    if [ "${src_release}" = "y" ]; then
+        # Some packages do not contain any directory level at all
+        if [ "${archive_dirname}" != "." ]; then
+            basename="${archive_dirname}"
+        else
+            basename="${pkg_name}-${version}"
+        fi
+        pkg_dir="${pkg_name}/${version}"
+        # Check which extensions we are allowed to fetch
+        for a in ${archive_formats}; do
+            for e in $(CT_DoListTarballExt); do
+                if [ "${a}" = "${e}" ]; then
+                    extensions="${extensions} ${a}"
+                    break
+                fi
+            done
+        done
+        if ! CT_GetFile package="${pkg_name}" pkg_dir="${pkg_dir}" dir_name="${dir_name}" \
+                basename="${archive_filename}" extensions="${extensions}" \
+                digest="${CT_VERIFY_DOWNLOAD_DIGEST}" \
+                signature_format="${CT_VERIFY_DOWNLOAD_SIGNATURE:+${signature_format}}" \
+                mirrors="${mirrors}"; then
+            CT_Abort "${pkg_name}: download failed"
+        fi
+
+    elif [ "${src_devel}" = "y" ]; then
+        local unique_id
+
+        if [ -z "${devel_revision}" -a "${CT_FORBID_DOWNLOAD}" = "y" ]; then
+            CT_Abort "${pkg_name}: cannot find most recent revisions with downloads prohibited"
+        fi
+
+        # Each VCS backend must provide two methods:
+        # - CT_GetVersion_xxx that sets the base name for the package (package name
+        #   and some unique identifier for the version)
+        # - CT_Download_xxx that retrieves the sources into the directory named as
+        #   ${pkg_name}
+        # Both these methods can also modify devel_branch/devel_revision. Typically,
+        # this would override empty (default) values with "default branch name" and
+        # "most current revision", respectively.
+
+        CT_GetVersion_${devel_vcs}
+        if [ -z "${unique_id}" ]; then
+            CT_Abort "${pkg_name}: ${devel_vcs} did not set unique ID for branch/revision"
+        fi
+        basename="${pkg_name}-${devel_vcs}-${unique_id}"
+        pkg_dir="${pkg_name}/${devel_vcs}-${unique_id}"
+
+        # Try getting the tarball with empty list of URLs: it will only
+        # attempt getting it from local storage or from the mirror if configured.
+        # Bzip2 offers a reasonable compromise between compression speed and size.
+        if [ "${unique_id}" != "to.be.determined" ] && \
+                CT_GetFile package="${pkg_name}" dir_name="${dir_name}" \
+                        basename="${basename}" extensions='.tar.bz2'; then
+            return 0
+        fi
+
+        if [ "${CT_FORBID_DOWNLOAD}" = "y" ]; then
+            CT_DoLog WARN "Downloads forbidden, not trying ${devel_vcs} retrieval"
+            CT_Abort "${pkg_name}: cannot check out"
+        fi
+
+        CT_DoLog EXTRA "Checking out '${basename}' (${devel_vcs} ${devel_url}${devel_branch:+, branch ${devel_branch}}${devel_revision:+, revision ${devel_revision}})"
+        CT_MktempDir tmp_dir
+        CT_Pushd "${tmp_dir}"
+        CT_Download_${devel_vcs}
+
+        # First setting above may not have determined the version (e.g. with Mercurial)
+        # Set the final, downloaded version.
+        basename="${pkg_name}-${devel_vcs}-${unique_id}"
+        pkg_dir="${pkg_name}/${devel_vcs}-${unique_id}"
+
+        CT_DoExecLog ALL mv "${pkg_name}${devel_subdir:+/${devel_subdir}}" "${basename}"
+        CT_DoExecLog ALL tar cjf "${CT_TARBALLS_DIR}/${basename}.tar.bz2" "${basename}"
+        if ! CT_SaveLocal "${CT_TARBALLS_DIR}/${basename}.tar.bz2" "${dir_name}"; then
+            CT_Abort "${pkg_name}: failed to save to local storage"
+        fi
+        CT_Popd
+        CT_DoExecLog ALL rm -rf "${tmp_dir}"
+
+    elif [ "${src_custom}" = "y" ]; then
+        # Will be handled during extraction/patching
+        basename="${dir_name}"
+        :;
+    else
+        CT_Abort "No known source for ${pkg_name}"
+    fi
+}
+
+# Obtain the sources for a component, either from a tarball, version control system
+# or a custom location.
+CT_Fetch()
+{
+    CT_PackageRun "${1}" CT_DoFetch
+}
+
+# Unpack an archive.
+CT_Extract()
+{
+    local file="${1}"
+    local dir="${2}"
+    local components="${3}"
+
+    CT_DoExecLog ALL mkdir -p "${dir}"
+    case "${file}" in
+        *.tar.*|*.tar)
+            CT_ZCat "${file}" | CT_DoExecLog FILE tar x -v -f - -C "${dir}" ${components}
+            ;;
+        *.zip)
+            CT_Pushd "${dir}"
+            CT_DoExecLog FILE unzip "${file}" ${components}
+            CT_Popd
+            ;;
+        *)
+            CT_Abort "Don't know how to handle ${file}: unknown extension"
+            ;;
+    esac
+}
+
+# Closure for unpacking/patching the sources. There are two source directories:
+# - CT_COMMON_SRC_DIR stores common sources, such as released tarballs (including
+#   bundled or local patches, if necessary) or checked out  working copies.
+#   Custom sources cannot be placed here, as they may have similarly named
+#   packages coming from different origins.
+# - CT_SRC_DIR stores per-configuration sources. These are either symlinks back
+#   to CT_ORIG_SRC_DIR sources, or a copy from the custom source, or a copy
+#   from CT_ORIG_SRC_DIR + target-specific overrides.
+CT_DoExtractPatch()
+{
+    local patchfunc="${1}"
+    local archive ext
+    local -a patch_dirs
+    local bundled_patch_dir
+    local local_patch_dir
+    local overlay
+
+    # Inherit global value if requested
+    if [ "${patch_order}" = "global" ]; then
+        patch_order="${CT_PATCH_ORDER}"
+    fi
+
+    # If using overlay, prepare it first - we need to determine where to unpack
+    # this component.
+    if [ "${CT_TARGET_USE_OVERLAY}" = "y" -a ! -d "${CT_BUILD_DIR}/overlay" ]; then
+        CT_DoExecLog ALL mkdir -p "${CT_BUILD_DIR}/overlay"
+        overlay="${CT_OVERLAY_LOCATION}/${CT_ARCH}_${CT_OVERLAY_NAME:-overlay}"
+        if [ -d "${overlay}" ]; then
+            CT_DoExecLog ALL cp -av "${overlay}/." "${CT_BUILD_DIR}/overlay"
+        else
+            if ! ext=`CT_GetFileExtension "${overlay}"`; then
+                CT_Abort "Overlay ${overlay} not found"
+            fi
+            CT_Extract "${overlay}${ext}" "${CT_BUILD_DIR}/overlay"
+        fi
+    fi
+
+    # Can use common location only if using non-custom source, only bundled patches
+    # and no overlays. Otherwise, this source directory is custom-tailored for this
+    # particular configuration and cannot be reused by different configurations.
+    if [ "${src_custom}" != "y" -a \
+            "${patch_order}" = "bundled" -a \
+            ! -d "${CT_BUILD_DIR}/overlay/${dir_name}" ]; then
+        src_dir="${CT_COMMON_SRC_DIR}"
+    else
+        src_dir="${CT_SRC_DIR}"
+    fi
+
+    if [ "${src_custom}" != "y" ]; then
+        # Non-custom: extract to shared location
+        # If the previous extraction/patching was aborted, clean up.
+        if [ -r "${src_dir}/.${basename}.extracting" -o \
+                -r "${src_dir}/.${basename}.patching" ]; then
+            CT_DoLog WARN "Sources for ${basename} were partially extracted/patched, cleaning up"
+            CT_DoExecLog ALL rm -rf "${src_dir}/${basename}"
+            CT_DoExecLog ALL rm -f "${src_dir}/.${basename}".*
+        fi
+
+        if [ -f "${src_dir}/.${basename}.extracted" ]; then
+            CT_DoLog DEBUG "Already extracted ${basename}"
+        else
+            CT_DoLog EXTRA "Extracting ${basename}"
+            CT_DoExecLog ALL touch "${src_dir}/.${basename}.extracting"
+            if [ "${src_release}" = "y" ]; then
+                archive="${archive_filename}"
+            else
+                archive="${basename}"
+            fi
+            # TBD save/discover the extension while fetching
+            ext=`CT_GetFileExtension "${CT_TARBALLS_DIR}/${archive}"`
+            if [ "${archive_dirname}" = "." ]; then
+                CT_mkdir_pushd "${src_dir}/${basename}"
+                CT_Extract "${CT_TARBALLS_DIR}/${archive}${ext}" "${src_dir}/${basename}"
+                CT_Popd
+            else
+                CT_Extract "${CT_TARBALLS_DIR}/${archive}${ext}" "${src_dir}"
+            fi
+            CT_DoExecLog ALL touch "${src_dir}/.${basename}.extracted"
+            CT_DoExecLog ALL rm -f "${src_dir}/.${basename}.extracting"
+        fi
+
+        if [ -f "${src_dir}/.${basename}.patched" ]; then
+            CT_DoLog DEBUG "Already patched ${basename}"
+        else
+            CT_DoLog EXTRA "Patching ${basename}"
+            CT_DoExecLog ALL touch "${src_dir}/.${basename}.patching"
+
+            bundled_patch_dir="${CT_LIB_DIR}/packages/${pkg_dir}"
+            local_patch_dir="${CT_LOCAL_PATCH_DIR}/${pkg_dir}"
+
+            case "${patch_order}" in
+                bundled)        patch_dirs=("${bundled_patch_dir}");;
+                local)          patch_dirs=("${local_patch_dir}");;
+                bundled,local)  patch_dirs=("${bundled_patch_dir}" "${local_patch_dir}");;
+                local,bundled)  patch_dirs=("${local_patch_dir}" "${bundled_patch_dir}");;
+                none)           patch_dirs=;;
+            esac
+
+            CT_Pushd "${src_dir}/${basename}"
+            for d in "${patch_dirs[@]}"; do
+                CT_DoLog DEBUG "Looking for patches in '${d}'..."
+                if [ -n "${d}" -a -d "${d}" ]; then
+                    for p in "${d}"/*.patch; do
+                        if [ -f "${p}" ]; then
+                            CT_DoExecLog ALL ${patch} --no-backup-if-mismatch -g0 -F1 -p1 -f -i "${p}"
+                        fi
+                    done
+                fi
+            done
+
+            # TBD create meta-package for config.sub/config.guess with replacement script
+            if [ "${CT_OVERRIDE_CONFIG_GUESS_SUB}" = "y" ]; then
+                CT_DoLog ALL "Overiding config.guess and config.sub"
+                for cfg in config.guess config.sub; do
+                    # Can't use CT_DoExecLog because of the '{} \;' to be passed un-mangled to find
+                    find . -type f -name "${cfg}" \
+                        -exec chmod -v u+w {} \; \
+                        -exec cp -v "${CT_LIB_DIR}/scripts/${cfg}" {} \; |CT_DoLog ALL
+                done
+            fi
+
+            # FIXME: This currently means we end up using host's autotools,
+            # but changing this requires reworking the order of operations in crosstool-NG:
+            # we'd need to defer the download/extraction/patching of a package until after
+            # the companion tools are built.
+            if [ -n "${devel_bootstrap}" ]; then
+                CT_DoExecLog ALL "${CT_CONFIG_SHELL}" -c "${devel_bootstrap}"
+            fi
+
+            # Fix up the timestamps on the file we may be patching: otherwise, we may
+            # have a circular dependency. For example, we need make to build autoconf
+            # and automake companion tools, but we need autoconf and automake to regenerate
+            # aclocal.m4 or config.h.in after the patch touches configure.ac. Instead,
+            # assume the patch fixes all the files it needs.
+            find . -type f -name "aclocal.m4" \
+                    -exec touch {} \; -exec echo touch {} \; | CT_DoLog ALL
+            find . -type f -name "config.h.in" \
+                    -exec touch {} \; -exec echo touch {} \; | CT_DoLog ALL
+            find . -type f -name "Makefile.in" \
+                    -exec touch {} \; -exec echo touch {} \; | CT_DoLog ALL
+            find . -type f -name "configure" \
+                    -exec touch {} \; -exec echo touch {} \; | CT_DoLog ALL
+
+            if [ -n "${patchfunc}" ]; then
+                ${patchfunc}
+            fi
+
+            CT_Popd
+
+            CT_DoExecLog ALL touch "${src_dir}/.${basename}.patched"
+            CT_DoExecLog ALL rm -f "${src_dir}/.${basename}.patching"
+        fi
+    else
+        CT_DoLog WARN "${pkg_name}: using custom location, no patches applied"
+    fi
+
+    # Symlink/move/copy into per-target source directory
+    if [ "${src_custom}" = "y" ]; then
+        # Custom sources: unpack or copy into per-target directory. Note that
+        # ${src_dir} is never ${CT_COMMON_SRC_DIR} in this case.
+        if [ -d "${custom_location}" ]; then
+            CT_DoExecLog ALL cp -av "${custom_location}" "${src_dir}/${dir_name}"
+        elif [ -f "${custom_location}" ]; then
+            # Assume "foo.tar.gz" (or likes) contain the "foo" directory
+            local bn
+
+            CT_Extract "${custom_location}" "${src_dir}"
+            bn=`CT_GetFileBasename "${custom_location##*/}"`
+            CT_TestOrAbort "Unknown file extension: ${custom_location}" -n "${bn}"
+            CT_DoExecLog ALL mv -v "${src_dir}/${bn%${ext}}" "${src_dir}/${dir_name}"
+        else
+            CT_Abort "Neither file nor directory: ${custom_location}"
+        fi
+    elif [ "${src_dir}" = "${CT_SRC_DIR}" ]; then
+        # Sources specific to this target, just move (if we use overlay, symlinks
+        # would be overwritten and overlayed files will end up in a separate dir).
+        CT_DoExecLog ALL mv "${src_dir}/${basename}" "${CT_SRC_DIR}/${dir_name}"
+    else
+        # Common source, just symlink
+        CT_DoExecLog ALL ln -s "${src_dir}/${basename}" "${CT_SRC_DIR}/${dir_name}"
+    fi
+
+    # Check if it has overlays and if it has, apply
+    if [ "${CT_TARGET_USE_OVERLAY}" = "y" -a \
+            -d "${CT_BUILD_DIR}/overlay/${dir_name}" ]; then
+        tar cf - -C "${CT_BUILD_DIR}/overlay" "${dir_name}" | \
+                CT_DoExecLog FILE tar xvf - -C "${src_dir}"
+    fi
+
+}
+
+# Extract/copy the sources to the shared source directory, then either symlink
+# or copy the sources into a private source directory and apply target-specific
+# changes (such as xtensa overrides).
+CT_ExtractPatch()
+{
+    local pkg="${1}"
+
+    shift
+    CT_PackageRun "${pkg}" CT_DoExtractPatch "$@"
+}
+
+# Set the specified variable to the version of the package (main or fork)
+# Usage: CT_GetPkgVersion PKG VAR
+CT_GetPkgVersion()
+{
+    local rv
+    __do_GetPkgVersion() { rv="${version}"; }
+    CT_PackageRun "${1}" __do_GetPkgVersion
+    eval "${2}=\"${rv}\""
+}
+
+# Get a package version selected to build. May return an empty string.
+# Usage: CT_GetPkgBuildVersion PKG VAR
+# where PKG may refer to a specific package (e.g. GCC) or package choice
+# (e.g. LIBC).
+CT_GetPkgBuildVersion()
+{
+    local category="${1}"
+    local component="${2}"
+    local var="${3}"
+    local choicename tmp pkg build_version
+
+    # If it is for a choice, not a menu, get the choice name
+    eval "choicename=\${CT_${category}}"
+
+    # Find the associated package
+    eval "pkg=\${CT_${category}_${component}_PKG_KSYM}"
+    if [ -z "${pkg}" ]; then
+        # This component does not have an associated package,
+        # return the component name.
+        if [ -n "${choicename}" ]; then
+            eval "${var}=\"${choicename}\""
+        fi
+        return
+    fi
+
+    __do_GetPkgBuildVersion() {
+        tmp="${pkg_name}"
+        if [ "${version}" != "unknown" ]; then
+            tmp+="-${version}"
+        fi
+        if [ "${src_devel}" = "y" ]; then
+            tmp+="-${devel_vcs}"
+            if [ -n "${devel_revision}" ]; then
+                tmp+="-${devel_revision}"
+            fi
+        elif [ "${src_custom}" = "y" ]; then
+            tmp+="-custom"
+        fi
+        if [ -n "${choicename}" -a "${pkg}" != "${component}" ]; then
+            tmp+=" (${choicename})"
+        fi
+    }
+
+    CT_PackageRun "${pkg}" __do_GetPkgBuildVersion
+    eval "${var}=\"${tmp}\""
+}
+
+# Finally, load paths.sh. For --enable-local build, it is located in
+# the current directory (CT_TOP_DIR) while the rest of the scripts are
+# in the source directory (CT_LIB_DIR). For other setups, paths.sh
+# is in CT_LIB_DIR.
+if [ -r "${CT_LIB_DIR}/paths.sh" ]; then
+    paths_sh_location="${CT_LIB_DIR}/paths.sh"
+elif [ -r "${CT_TOP_DIR}/paths.sh" ]; then
+    paths_sh_location="${CT_TOP_DIR}/paths.sh"
+else
+    CT_Error "Not found: paths.sh"
+fi
+. "${paths_sh_location}"
+
+CT_InstallCopyingInformation()
+{
+    local licfile
+    local dstdir
+
+    CT_DoLog EXTRA "Collect license information from: ${CT_SRC_DIR}"
+    CT_DoLog EXTRA "Put the license information to: ${CT_PREFIX_DIR}/share/licenses"
+
+    for licfile in $( find "${CT_SRC_DIR}" -follow -type f -a \( -name "COPYING*" -o -name "LICENSE*" \) ); do
+        dstdir="${licfile%/*}"
+        dstdir="${CT_PREFIX_DIR}/share/licenses${dstdir#${CT_SRC_DIR}}"
+        mkdir -p "${dstdir}"
+        CT_DoExecLog ALL cp -av "${licfile}" "${dstdir}/"
+    done
+
+    # Also add crosstool's information
+    for licfile in ${CT_LIB_DIR}/{COPYING*,LICENSE*,licenses.d}; do
+        dstdir="${CT_PREFIX_DIR}/share/licenses/crosstool-ng"
+        mkdir -p "${dstdir}"
+        CT_DoExecLog ALL cp -av "${licfile}" "${dstdir}/"
+    done
+
+    shopt -u nullglob
+}
+
+CT_InstallConfigurationFile()
+{
+    local path="${1}"
+    local suffix="${2}"
+
+    CT_DoExecLog ALL mkdir -p "${CT_PREFIX_DIR}/bin"
+    CT_DoExecLog DEBUG ${install} -m 0755 "${CT_LIB_DIR}/scripts/toolchain-config.in" "${CT_PREFIX_DIR}/bin/${CT_TARGET}-${suffix}.config"
+    CT_DoExecLog DEBUG ${sed} -i -e 's,@@grep@@,"'"${grep}"'",;' "${CT_PREFIX_DIR}/bin/${CT_TARGET}-${suffix}.config"
+    bzip2 -c -9 "${path}" >>"${CT_PREFIX_DIR}/bin/${CT_TARGET}-${suffix}.config"
 }

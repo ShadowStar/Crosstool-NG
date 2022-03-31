@@ -13,16 +13,12 @@ if [ "${CT_MPC}" = "y" ]; then
 
 # Download MPC
 do_mpc_get() {
-    CT_GetFile "mpc-${CT_MPC_VERSION}" .tar.gz      \
-        http://mirrors.tuna.tsinghua.edu.cn/gnu/mpc \
-        {http,ftp,https}://ftp.gnu.org/gnu/mpc      \
-        http://www.multiprecision.org/mpc/download
+    CT_Fetch MPC
 }
 
 # Extract MPC
 do_mpc_extract() {
-    CT_Extract "mpc-${CT_MPC_VERSION}"
-    CT_Patch "mpc" "${CT_MPC_VERSION}"
+    CT_ExtractPatch MPC
 }
 
 # Build MPC for running on build
@@ -88,7 +84,7 @@ do_mpc_backend() {
     CFLAGS="${cflags}"                              \
     LDFLAGS="${ldflags}"                            \
     ${CONFIG_SHELL}                                 \
-    "${CT_SRC_DIR}/mpc-${CT_MPC_VERSION}/configure" \
+    "${CT_SRC_DIR}/mpc/configure"                   \
         --build=${CT_BUILD}                         \
         --host=${host}                              \
         --prefix="${prefix}"                        \
@@ -98,12 +94,12 @@ do_mpc_backend() {
         --enable-static
 
     CT_DoLog EXTRA "Building MPC"
-    CT_DoExecLog ALL make ${JOBSFLAGS}
+    CT_DoExecLog ALL make ${CT_JOBSFLAGS}
 
     if [ "${CT_COMPLIBS_CHECK}" = "y" ]; then
         if [ "${host}" = "${CT_BUILD}" ]; then
             CT_DoLog EXTRA "Checking MPC"
-            CT_DoExecLog ALL make ${JOBSFLAGS} -s check
+            CT_DoExecLog ALL make ${CT_JOBSFLAGS} -s check
         else
             # Cannot run host binaries on build in a canadian cross
             CT_DoLog EXTRA "Skipping check for MPC on the host"

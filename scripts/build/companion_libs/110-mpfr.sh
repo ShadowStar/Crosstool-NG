@@ -13,18 +13,14 @@ if [ "${CT_MPFR}" = "y" ]; then
 
 # Download MPFR
 do_mpfr_get() {
-    CT_GetFile "mpfr-${CT_MPFR_VERSION}"            \
-        http://mirrors.tuna.tsinghua.edu.cn/gnu/mpfr \
-        http://www.mpfr.org/mpfr-current/  \
-        {https,http,ftp}://ftp.gnu.org/gnu/mpfr     \
-        http://www.mpfr.org/mpfr-${CT_MPFR_VERSION}
+    CT_Fetch MPFR
 }
 
 # Extract MPFR
 do_mpfr_extract() {
-    CT_Extract "mpfr-${CT_MPFR_VERSION}"
-    CT_Patch "mpfr" "${CT_MPFR_VERSION}"
+    CT_ExtractPatch MPFR
 
+    # TBD is it a problem with 2.4.x? The comment says it is not, yet the code is run
     # OK, Gentoo have a sanity check that libtool.m4 and ltmain.sh have the
     # same version number. Unfortunately, some tarballs of MPFR are not
     # built sanely, and thus ./configure fails on Gentoo.
@@ -117,7 +113,7 @@ do_mpfr_backend() {
     CFLAGS="${cflags}"                                  \
     LDFLAGS="${ldflags}"                                \
     ${CONFIG_SHELL}                                     \
-    "${CT_SRC_DIR}/mpfr-${CT_MPFR_VERSION}/configure"   \
+    "${CT_SRC_DIR}/mpfr/configure"                      \
         --build=${CT_BUILD}                             \
         --host=${host}                                  \
         --prefix="${prefix}"                            \
@@ -126,12 +122,12 @@ do_mpfr_backend() {
         --enable-static
 
     CT_DoLog EXTRA "Building MPFR"
-    CT_DoExecLog ALL make ${JOBSFLAGS}
+    CT_DoExecLog ALL make ${CT_JOBSFLAGS}
 
     if [ "${CT_COMPLIBS_CHECK}" = "y" ]; then
         if [ "${host}" = "${CT_BUILD}" ]; then
             CT_DoLog EXTRA "Checking MPFR"
-            CT_DoExecLog ALL make ${JOBSFLAGS} -s check
+            CT_DoExecLog ALL make ${CT_JOBSFLAGS} -s check
         else
             # Cannot run host binaries on build in a canadian cross
             CT_DoLog EXTRA "Skipping check for MPFR on the host"

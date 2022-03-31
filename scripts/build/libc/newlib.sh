@@ -5,64 +5,33 @@
 # Edited by Martin Lund <mgl@doredevelopment.dk>
 #
 
-do_libc_get() {
-    local libc_src="{http://mirrors.kernel.org/sourceware/newlib,
-                     ftp://sourceware.org/pub/newlib}"
-
-    if [ "${CT_LIBC_NEWLIB_CUSTOM}" = "y" ]; then
-        CT_GetCustom "newlib" "${CT_LIBC_NEWLIB_CUSTOM_VERSION}" \
-            "${CT_LIBC_NEWLIB_CUSTOM_LOCATION}"
-    else # ! custom location
-        case "${CT_LIBC_VERSION}" in
-            linaro-*)
-                CT_GetLinaro "newlib" "${CT_LIBC_VERSION}"
-                ;;
-            *)
-                # kernel.org mirror is outdated, keep last as a fallback
-                CT_GetFile "newlib-${CT_LIBC_VERSION}" \
-                           ftp://sourceware.org/pub/newlib \
-                           http://mirrors.kernel.org/sourceware/newlib \
-                           http://mirrors.kernel.org/sources.redhat.com/newlib
-                ;;
-        esac
-    fi # ! custom location
-}
-
-do_libc_extract() {
-    CT_Extract "newlib-${CT_LIBC_VERSION}"
-    CT_Patch "newlib" "${CT_LIBC_VERSION}"
-
-    if [ -n "${CT_ARCH_XTENSA_CUSTOM_NAME}" ]; then
-        CT_ConfigureXtensa "newlib" "${CT_LIBC_VERSION}"
-    fi
-}
-
-do_libc_start_files() {
+newlib_start_files()
+{
     CT_DoStep INFO "Installing C library headers & start files"
-    CT_DoExecLog ALL cp -a "${CT_SRC_DIR}/newlib-${CT_LIBC_VERSION}/newlib/libc/include/." \
+    CT_DoExecLog ALL cp -a "${CT_SRC_DIR}/newlib/newlib/libc/include/." \
     "${CT_HEADERS_DIR}"
-    if [ "${CT_ARCH_xtensa}" = "y" ]; then
+    if [ "${CT_ARCH_XTENSA}" = "y" ]; then
         CT_DoLog EXTRA "Installing Xtensa headers"
-        CT_DoExecLog ALL cp -r "${CT_SRC_DIR}/newlib-${CT_LIBC_VERSION}/newlib/libc/sys/xtensa/include/."   \
+        CT_DoExecLog ALL cp -r "${CT_SRC_DIR}/newlib/newlib/libc/sys/xtensa/include/."   \
                                "${CT_HEADERS_DIR}"
     fi
     CT_EndStep
 }
 
-do_libc() {
+newlib_main()
+{
     local -a newlib_opts
     local cflags_for_target
 
     CT_DoStep INFO "Installing C library"
 
-    mkdir -p "${CT_BUILD_DIR}/build-libc"
-    cd "${CT_BUILD_DIR}/build-libc"
+    CT_mkdir_pushd "${CT_BUILD_DIR}/build-libc"
 
     CT_DoLog EXTRA "Configuring C library"
 
     # Multilib is the default, so if it is not enabled, disable it.
     if [ "${CT_MULTILIB}" != "y" ]; then
-        extra_config+=("--disable-multilib")
+        newlib_opts+=("--disable-multilib")
     fi
 
     if [ "${CT_LIBC_NEWLIB_IO_FLOAT}" = "y" ]; then
@@ -89,13 +58,13 @@ IO_LL:newlib-io-long-long
 NEWLIB_REGISTER_FINI:newlib-register-fini
 NANO_MALLOC:newlib-nano-malloc
 NANO_FORMATTED_IO:newlib-nano-formatted-io
-ATEXIT_DYNAMIC_ALLOC:atexit-dynamic-alloc
+ATEXIT_DYNAMIC_ALLOC:newlib-atexit-dynamic-alloc
 GLOBAL_ATEXIT:newlib-global-atexit
 LITE_EXIT:lite-exit
-REENT_SMALL:reent-small
-MULTITHREAD:multithread
+REENT_SMALL:newlib-reent-small
+MULTITHREAD:newlib-multithread
 WIDE_ORIENT:newlib-wide-orient
-UNBUF_STREAM_OPT:unbuf-stream-opt
+UNBUF_STREAM_OPT:newlib-unbuf-stream-opt
 ENABLE_TARGET_OPTSPACE:target-optspace
     "
 
@@ -118,7 +87,7 @@ ENABLE_TARGET_OPTSPACE:target-optspace
     [ "${CT_LIBC_NEWLIB_LTO}" = "y" ] && \
         CT_LIBC_NEWLIB_TARGET_CFLAGS="${CT_LIBC_NEWLIB_TARGET_CFLAGS} -flto"
 
-    cflags_for_target="${CT_TARGET_CFLAGS} ${CT_LIBC_NEWLIB_TARGET_CFLAGS}"
+    cflags_for_target="${CT_ALL_TARGET_CFLAGS} ${CT_LIBC_NEWLIB_TARGET_CFLAGS}"
 
     # Note: newlib handles the build/host/target a little bit differently
     # than one would expect:
@@ -131,7 +100,7 @@ ENABLE_TARGET_OPTSPACE:target-optspace
     AR_FOR_TARGET="`which ${CT_TARGET}-gcc-ar`"                    \
     RANLIB_FOR_TARGET="`which ${CT_TARGET}-gcc-ranlib`"            \
     ${CONFIG_SHELL}                                                \
-    "${CT_SRC_DIR}/newlib-${CT_LIBC_VERSION}/configure"            \
+    "${CT_SRC_DIR}/newlib/configure"                               \
         --host=${CT_BUILD}                                         \
         --target=${CT_TARGET}                                      \
         --prefix=${CT_PREFIX_DIR}                                  \
@@ -139,7 +108,7 @@ ENABLE_TARGET_OPTSPACE:target-optspace
         "${CT_LIBC_NEWLIB_EXTRA_CONFIG_ARRAY[@]}"
 
     CT_DoLog EXTRA "Building C library"
-    CT_DoExecLog ALL make ${JOBSFLAGS}
+    CT_DoExecLog ALL make ${CT_JOBSFLAGS}
 
     CT_DoLog EXTRA "Installing C library"
     CT_DoExecLog ALL make install
@@ -159,9 +128,6 @@ ENABLE_TARGET_OPTSPACE:target-optspace
                                 "${CT_PREFIX_DIR}/share/doc/newlib"
     fi
 
+    CT_Popd
     CT_EndStep
-}
-
-do_libc_post_cc() {
-    :
 }

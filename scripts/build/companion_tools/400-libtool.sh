@@ -1,17 +1,17 @@
 # Build script for libtool
 
-do_companion_tools_libtool_get() {
-    CT_GetFile "libtool-${CT_LIBTOOL_VERSION}"     \
-        {http,ftp,https}://ftp.gnu.org/gnu/libtool
+do_companion_tools_libtool_get()
+{
+    CT_Fetch LIBTOOL
 }
 
-do_companion_tools_libtool_extract() {
-    CT_Extract "libtool-${CT_LIBTOOL_VERSION}"
-    CT_DoExecLog ALL chmod -R u+w "${CT_SRC_DIR}/libtool-${CT_LIBTOOL_VERSION}"
-    CT_Patch "libtool" "${CT_LIBTOOL_VERSION}"
+do_companion_tools_libtool_extract()
+{
+    CT_ExtractPatch LIBTOOL
 }
 
-do_companion_tools_libtool_for_build() {
+do_companion_tools_libtool_for_build()
+{
     CT_DoStep INFO "Installing libtool for build"
     CT_mkdir_pushd "${CT_BUILD_DIR}/build-libtool-build"
     do_libtool_backend host=${CT_BUILD} prefix="${CT_BUILD_COMPTOOLS_DIR}"
@@ -19,7 +19,8 @@ do_companion_tools_libtool_for_build() {
     CT_EndStep
 }
 
-do_companion_tools_libtool_for_host() {
+do_companion_tools_libtool_for_host()
+{
     CT_DoStep INFO "Installing libtool for host"
     CT_mkdir_pushd "${CT_BUILD_DIR}/build-libtool-host"
     do_libtool_backend host=${CT_HOST} prefix="${CT_PREFIX_DIR}"
@@ -27,7 +28,8 @@ do_companion_tools_libtool_for_host() {
     CT_EndStep
 }
 
-do_libtool_backend() {
+do_libtool_backend()
+{
     local host
     local prefix
 
@@ -38,7 +40,7 @@ do_libtool_backend() {
     CT_DoLog EXTRA "Configuring libtool"
     CT_DoExecLog CFG \
                      ${CONFIG_SHELL} \
-                     "${CT_SRC_DIR}/libtool-${CT_LIBTOOL_VERSION}/configure" \
+                     "${CT_SRC_DIR}/libtool/configure" \
                      --host="${host}" \
                      --prefix="${prefix}"
 

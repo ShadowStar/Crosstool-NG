@@ -2,10 +2,7 @@
 
 menu "Target options"
 
-config ARCH
-    string
-
-source "config.gen/arch.in"
+source "config/gen/arch.in"
 
 config ARCH_SUFFIX
     string
@@ -21,6 +18,21 @@ config ARCH_SUFFIX
       specific suffix that crosstool-NG may compute.
       
       If you are not sure about what this is, leave it blank.
+
+config OMIT_TARGET_ARCH
+    bool
+    help
+      Do not include architecture into the target tuple.
+
+config OMIT_TARGET_VENDOR
+    bool "Omit vendor part of the target tuple"
+    help
+      Do not include vendor into the target tuple.
+
+config TARGET_SKIP_CONFIG_SUB
+    bool
+    help
+      Skip canonicalization of the target tuple.
 
 #--------------------------------------
 comment "Generic target options"
@@ -96,8 +108,20 @@ config ARCH_USE_MMU
       have one (eg. ARM Cortex-A8).
 
 #--------------------------------------
+config ARCH_SUPPORTS_FLAT_FORMAT
+    bool
+
+#--------------------------------------
+config ARCH_SUPPORTS_EITHER_ENDIAN
+    bool
+    help
+      Architecture allows to select endianness at the time the toolchain is built.
+
 config ARCH_SUPPORTS_BOTH_ENDIAN
     bool
+    select ARCH_SUPPORTS_EITHER_ENDIAN
+    help
+      Toolchain supports both big/little endian.
 
 config ARCH_DEFAULT_BE
     bool
@@ -105,12 +129,22 @@ config ARCH_DEFAULT_BE
 config ARCH_DEFAULT_LE
     bool
 
+config ARCH_DEFAULT_BE_LE
+    bool
+    depends on ARCH_SUPPORTS_BOTH_ENDIAN
+
+config ARCH_DEFAULT_LE_BE
+    bool
+    depends on ARCH_SUPPORTS_BOTH_ENDIAN
+
 choice
     bool
     prompt "Endianness:"
-    depends on ARCH_SUPPORTS_BOTH_ENDIAN
+    depends on ARCH_SUPPORTS_EITHER_ENDIAN
     default ARCH_BE if ARCH_DEFAULT_BE
     default ARCH_LE if ARCH_DEFAULT_LE
+    default ARCH_BE_LE if ARCH_DEFAULT_BE_LE
+    default ARCH_LE_BE if ARCH_DEFAULT_LE_BE
 
 config ARCH_BE
     bool
@@ -120,16 +154,31 @@ config ARCH_LE
     bool
     prompt "Little endian"
 
+config ARCH_BE_LE
+    bool
+    prompt "Both, default big endian"
+    depends on ARCH_SUPPORTS_BOTH_ENDIAN
+
+config ARCH_LE_BE
+    bool
+    prompt "Both, default little endian"
+    depends on ARCH_SUPPORTS_BOTH_ENDIAN
+
 endchoice
 
 config ARCH_ENDIAN
     string
-    depends on ARCH_SUPPORTS_BOTH_ENDIAN
-    default "big"       if ARCH_BE
-    default "little"    if ARCH_LE
+    depends on ARCH_SUPPORTS_EITHER_ENDIAN
+    default "big"        if ARCH_BE
+    default "little"     if ARCH_LE
+    default "big,little" if ARCH_BE_LE
+    default "little,big" if ARCH_LE_BE
 
 #--------------------------------------
 config ARCH_SUPPORTS_8
+    bool
+
+config ARCH_SUPPORTS_16
     bool
 
 config ARCH_SUPPORTS_32
@@ -141,6 +190,9 @@ config ARCH_SUPPORTS_64
 config ARCH_DEFAULT_8
     bool
 
+config ARCH_DEFAULT_16
+    bool
+
 config ARCH_DEFAULT_32
     bool
 
@@ -150,6 +202,7 @@ config ARCH_DEFAULT_64
 config ARCH_BITNESS
     int
     default "8"     if ARCH_8
+    default "16"    if ARCH_16
     default "32"    if ARCH_32
     default "64"    if ARCH_64
 
@@ -157,6 +210,7 @@ choice
     bool
     prompt "Bitness:"
     default ARCH_8  if ARCH_DEFAULT_8
+    default ARCH_16 if ARCH_DEFAULT_16
     default ARCH_32 if ARCH_DEFAULT_32
     default ARCH_64 if ARCH_DEFAULT_64
 
@@ -164,6 +218,11 @@ config ARCH_8
     bool
     prompt "8-bit"
     depends on ARCH_SUPPORTS_8
+
+config ARCH_16
+    bool
+    prompt "16-bit"
+    depends on ARCH_SUPPORTS_16
 
 config ARCH_32
     bool
@@ -198,6 +257,9 @@ config ARCH_SUPPORTS_WITH_FLOAT
 config ARCH_SUPPORTS_WITH_FPU
     bool
 
+config ARCH_SUPPORTS_WITH_ENDIAN
+    bool
+
 config ARCH_SUPPORTS_SOFTFP
     bool
 
@@ -223,7 +285,9 @@ config ARCH_ARCH
       target CPU.
       
       Leave blank if you don't know, or if your target architecture does not
-      offer this option.
+      offer this option. Must be specified for 32-bit x86 that uses some
+      C library (glibc, uClibc-ng, ...) - the default, "i386" is not supported
+      by these libraries.
 
 config ARCH_ABI
     string
@@ -386,12 +450,35 @@ config TARGET_LDFLAGS
 
 config ARCH_FLOAT
     string
-    default ""       if ! ARCH_SUPPORTS_WITH_FLOAT
     default "auto"   if ARCH_FLOAT_AUTO
     default "hard"   if ARCH_FLOAT_HW
     default "soft"   if ARCH_FLOAT_SW
     default "softfp" if ARCH_FLOAT_SOFTFP
 
-source "config.gen/arch.in.2"
+config TARGET_USE_OVERLAY
+    bool
+
+if TARGET_USE_OVERLAY
+
+config OVERLAY_NAME
+    string "Custom processor configuration name"
+    help
+      Enter the name of the custom processor configuration.
+      Overlay file for that configuration must be called
+      '<ARCH>_<OVERLAY_NAME>.tar' (optionally, with .gz/.bz2/.lzma/.xz
+      extension).
+
+      Leave blank to use the default '<ARCH>_overlay.tar'.
+      For more information about this option, please also consult the
+      section 'Using crosstool-NG to build Xtensa toolchains' in the
+      in http://crosstool-ng.github.io/docs/caveats-features/
+
+config OVERLAY_LOCATION
+    string "Full path to custom configuration (overlay)"
+    help
+      Enter the path to the directory for the custom processor
+      configuration file.
+
+endif
 
 endmenu

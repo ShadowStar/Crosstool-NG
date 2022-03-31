@@ -9,13 +9,11 @@ do_expat_for_target() { :; }
 if [ "${CT_EXPAT_TARGET}" = "y" -o "${CT_EXPAT}" = "y" ]; then
 
 do_expat_get() {
-    CT_GetFile "expat-${CT_EXPAT_VERSION}" .tar.gz    \
-               http://downloads.sourceforge.net/project/expat/expat/${CT_EXPAT_VERSION}
+    CT_Fetch EXPAT
 }
 
 do_expat_extract() {
-    CT_Extract "expat-${CT_EXPAT_VERSION}"
-    CT_Patch "expat" "${CT_EXPAT_VERSION}"
+    CT_ExtractPatch EXPAT
 }
 
 if [ "${CT_EXPAT}" = "y" ]; then
@@ -56,6 +54,7 @@ do_expat_for_target() {
             prefix="/usr"
             ;;
     esac
+    expat_opts+=( "cflags=${CT_ALL_TARGET_CFLAGS}" )
     expat_opts+=( "prefix=${prefix}" )
     expat_opts+=( "destdir=${CT_SYSROOT_DIR}" )
     expat_opts+=( "shared=${CT_SHARED_LIBS}" )
@@ -95,17 +94,18 @@ do_expat_backend() {
     CFLAGS="${cflags}"                                              \
     LDFLAGS="${ldflags}"                                            \
     ${CONFIG_SHELL}                                                 \
-    "${CT_SRC_DIR}/expat-${CT_EXPAT_VERSION}/configure"             \
+    "${CT_SRC_DIR}/expat/configure"                                 \
         --build=${CT_BUILD}                                         \
         --host=${host}                                              \
         --prefix="${prefix}"                                        \
         --enable-static                                             \
+        --without-docbook                                           \
         "${extra_config[@]}"
 
     CT_DoLog EXTRA "Building expat"
-    CT_DoExecLog ALL make ${JOBSFLAGS}
+    CT_DoExecLog ALL make ${CT_JOBSFLAGS}
     CT_DoLog EXTRA "Installing expat"
-    CT_DoExecLog ALL make install INSTALL_ROOT="${destdir}"
+    CT_DoExecLog ALL make install DESTDIR="${destdir}"
 }
 
 fi

@@ -2,6 +2,29 @@ A (slightly) ordered set of tasks for crosstool-NG. Written in a cryptic languag
 
 -- Alexey Neyman (@stilor)
 
+[ ] Migrate .config and build.log into per-target directory, make top-level file into symlinks - this will allow to compare/debug multiple configs side-by-side without overwriting each other
+[ ] Need a variant of CT_DoExecLog that only captures stderr - for use where we need stdout for further processing but want to capture errors
+  [ ] Use in test-package.sh
+[ ] mirror: remove crosstool-ng.org mirroring of archives? Use the option only for local mirrors? Archives currently hosted are outdated.
+[ ] old mingw-w64 fails to build (with new gcc?) - the headers are installed into usr/x86_64-w64-mingw32/x86_64-w64-mingw32/include instead of usr/x86_64-w64-mingw32/include
+  [ ] fix or retire?
+[ ] test-packages.sh
+  [ ] FTP URLs always succeed in verification (wget bug) - how to work around?
+[ ] templates (bootstrap)
+  [ ] relevant pattern for Linaro releases - tie to the major version
+[ ] new packages
+  [ ] config.guess
+  [ ] gnulib
+    [ ] use gnulib in m4, gettext, libiconv, libtool
+  [ ] autoconf-archive
+    [ ] use to retrieve ax_pthread.m4 (gettext?)
+[ ] arm_neon.h - offer as a companion "library" for the target
+[ ] gdbinit (installed if CT_GDB_INSTALL_GDBINIT is set) is not relocatable, contains absolute paths
+[ ] Support alldefconfig/allnoconfig/other standard kconfig targets
+[ ] Xtensa
+  [ ] Merge from xtensa maintainer whatever applicable?
+    [ ] Newlib does not seem to be working
+  [ ] Avoid printing "Using <overlay>" if the sources are already prepared
 [ ] FreeBSD
   [ ] Use 'cc' rather than 'gcc' on the host
     [ ] Detect in configure what the default value is
@@ -16,11 +39,17 @@ A (slightly) ordered set of tasks for crosstool-NG. Written in a cryptic languag
 [ ] mingw.sh: create a hook for "pre-checks" for all libcs
   [ ] move CT_DoMultilibList to this new hook?
 [ ] go over all config options and evaluate their applicability to cross/canadian/cross-native (i.e. WANTS_STATIC_LINK does not have to test build's support for static link)
-[ ] Remove per-arch patching (this makes .build/src non-sharable between builds!)
 [ ] Update "Internals" chapter in the docs to match current state
 [ ] Integrate openrisc support
 [ ] Re-enable shared libraries - can it be done without wrapper scripts, e.g. via rpath?
+[ ] 'ct-ng source'
+  [ ] disregard FORBID_DOWNLOADS and to avoid clobbering .build and build.log
+  [ ] should not check/prepare environment (#776)
+  [ ] move download/patching/prepare into separate steps
+    [ ] beware of TBD - want to use autotools for all packages after they're built, so need to defer preparation of the sources from a repo
 [ ] 'ct-ng' source to disregard FORBID_DOWNLOADS and to avoid clobbering .build and build.log
+  [ ] Make ONLY_{DOWNLOAD,EXTRACT} options into steps
+  [ ] Create "prepare" state to make the environment checks, after "download"
 [ ] Restore blackfin/fdpic support?
 [ ] Install bash completion script - are there any default locations for it?
 [ ] Do we need "HACK: we need to override SHLIB_LC from gcc/config/t-slibgcc-elf-ver" block in 100-gcc.sh? We do create a dummy libc.so
@@ -46,7 +75,6 @@ A (slightly) ordered set of tasks for crosstool-NG. Written in a cryptic languag
   [ ] add passthrough to configure, for host/target
 [ ] Read/spellcheck configs & scripts
 [ ] 'ct-ng olddefconfig'
-[ ] Install config.gen so that it is not rebuilt in the installed configurations
 [ ] Install a "trap" C++ compiler as ${CT_TARGET}-g++ during pass-1/pass-2 to trap attempts to compile target code with g++ (currently glibc detects host g++ and warns that it uses g++ w/o target triplet)
   [ ] Somehow it needs to be functional during the configure step - export env var while running in CT_DoExecLog with CFG level, and forward it to host compiler?
 [ ] elf2flt not compatible with multiple linkers enabled in binutils (ld.bfd + ld.gold) - fix upstream?
@@ -83,8 +111,7 @@ A (slightly) ordered set of tasks for crosstool-NG. Written in a cryptic languag
 [ ] #534 Merge gcc backends in 100-gcc.sh 
   [ ] Currently some options (e.g. plugins) are not supported in core backend, hence aren't available on baremetal configurations
 [ ] Support clang
-[ ] Generate per-package version Kconfig fragments, and include them
-  [ ] Add a script to poll for new releases
+[ ] Add a script to poll for new releases
 [ ] Install a single lib/ directory with all the stuff needed - scripts, makefile fragments, etc
   [ ] Separate maintainer's scripts from the scripts used by crosstool-ng itself
   [ ] Commit testing.py to the new maintainer's dir

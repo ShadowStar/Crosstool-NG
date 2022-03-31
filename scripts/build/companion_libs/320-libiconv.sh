@@ -9,13 +9,11 @@ do_libiconv_for_target() { :; }
 if [ "${CT_LIBICONV}" = "y" ]; then
 
 do_libiconv_get() {
-    CT_GetFile "libiconv-${CT_LIBICONV_VERSION}" \
-               http://ftp.gnu.org/pub/gnu/libiconv/
+    CT_Fetch LIBICONV
 }
 
 do_libiconv_extract() {
-    CT_Extract "libiconv-${CT_LIBICONV_VERSION}"
-    CT_Patch "libiconv" "${CT_LIBICONV_VERSION}"
+    CT_ExtractPatch LIBICONV
 }
 
 # Build libiconv for running on build
@@ -93,7 +91,7 @@ do_libiconv_backend() {
     CFLAGS="${cflags}"                                        \
     LDFLAGS="${ldflags}"                                      \
     ${CONFIG_SHELL}                                           \
-    "${CT_SRC_DIR}/libiconv-${CT_LIBICONV_VERSION}/configure" \
+    "${CT_SRC_DIR}/libiconv/configure"                        \
         --build=${CT_BUILD}                                   \
         --host="${host}"                                      \
         --prefix="${prefix}"                                  \
@@ -102,7 +100,7 @@ do_libiconv_backend() {
         "${extra_config[@]}"                                  \
 
     CT_DoLog EXTRA "Building libiconv"
-    CT_DoExecLog ALL make CC="${host}-gcc ${cflags}" ${JOBSFLAGS}
+    CT_DoExecLog ALL make CC="${host}-gcc ${cflags}" ${CT_JOBSFLAGS}
 
     CT_DoLog EXTRA "Installing libiconv"
     CT_DoExecLog ALL make install CC="${host}-gcc ${cflags}"

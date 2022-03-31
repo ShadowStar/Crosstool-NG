@@ -2,69 +2,23 @@
 # Copyright 2007 Yann E. MORIN
 # Licensed under the GPL v2. See COPYING in the root of this package
 
-# This is a constant because it does not change very often.
-# We're in 2010, and are still using data from 7 years ago.
-uclibc_locales_version=030818
-uclibc_locale_tarball="uClibc-locale-${uclibc_locales_version}"
-
-if [ "${CT_LIBC_UCLIBC_NG}" = "y" ]; then
-    uclibc_name="uClibc-ng"
-    libc_src="http://downloads.uclibc-ng.org/releases/${CT_LIBC_VERSION}"
-else
-    uclibc_name="uClibc"
-    libc_src="http://www.uclibc.org/downloads
-              http://www.uclibc.org/downloads/old-releases"
-fi
-
-# Download uClibc
-do_libc_get() {
-    if [ "${CT_LIBC_UCLIBC_CUSTOM}" = "y" ]; then
-        CT_GetCustom "${uclibc_name}" "${CT_LIBC_UCLIBC_CUSTOM_VERSION}" \
-            "${CT_LIBC_UCLIBC_CUSTOM_LOCATION}"
-    else
-        CT_GetFile "${uclibc_name}-${CT_LIBC_VERSION}" ${libc_src}
-    fi
-    # uClibc locales
-    if [ "${CT_LIBC_UCLIBC_LOCALES_PREGEN_DATA}" = "y" ]; then
-        CT_GetFile "${uclibc_locale_tarball}" ${libc_src}
-    fi
-
-    return 0
-}
-
-# Extract uClibc
-do_libc_extract() {
-    CT_Extract "${uclibc_name}-${CT_LIBC_VERSION}"
-    CT_Patch "${uclibc_name}" "${CT_LIBC_VERSION}"
-
-    # uClibc locales
-    # Extracting pregen locales ourselves is kinda
-    # broken, so just link it in place...
-    if [    "${CT_LIBC_UCLIBC_LOCALES_PREGEN_DATA}" = "y"           \
-         -a ! -f "${CT_SRC_DIR}/.${uclibc_locale_tarball}.extracted" ]; then
-        CT_Pushd "${CT_SRC_DIR}/${uclibc_name}-${CT_LIBC_VERSION}/extra/locale"
-        CT_DoExecLog ALL ln -s "${CT_TARBALLS_DIR}/${uclibc_locale_tarball}.tgz" .
-        CT_Popd
-        touch "${CT_SRC_DIR}/.${uclibc_locale_tarball}.extracted"
-    fi
-
-    return 0
-}
-
 # Build and install headers and start files
-do_libc_start_files() {
+uClibc_start_files()
+{
     # Start files and Headers should be configured the same way as the
     # final libc, but built and installed differently.
-    do_libc_backend libc_mode=startfiles
+    uClibc_backend libc_mode=startfiles
 }
 
 # This function builds and install the full C library
-do_libc() {
-    do_libc_backend libc_mode=final
+uClibc_main()
+{
+    uClibc_backend libc_mode=final
 }
 
 # Common backend for 1st and 2nd passes.
-do_libc_backend() {
+uClibc_backend()
+{
     local libc_mode
     local arg
 
@@ -79,30 +33,34 @@ do_libc_backend() {
     esac
 
     CT_mkdir_pushd "${CT_BUILD_DIR}/build-libc-${libc_mode}"
-    CT_IterateMultilibs do_libc_backend_once multilib libc_mode="${libc_mode}"
+    CT_IterateMultilibs uClibc_backend_once multilib libc_mode="${libc_mode}"
     CT_Popd
     CT_EndStep
 }
 
 # Common backend for 1st and 2nd passes, once per multilib.
-do_libc_backend_once() {
+uClibc_backend_once()
+{
     local libc_mode
     local multi_dir multi_os_dir multi_root multi_flags multi_index multi_count
     local multilib_dir startfiles_dir
-    local jflag=${CT_LIBC_UCLIBC_PARALLEL:+${JOBSFLAGS}}
+    local jflag=${CT_LIBC_UCLIBC_PARALLEL:+${CT_JOBSFLAGS}}
     local -a make_args
     local extra_cflags f cfg_cflags cf
     local hdr_install_subdir
+    local uClibc_name
 
     for arg in "$@"; do
         eval "${arg// /\\ }"
     done
 
-    CT_DoStep INFO "Building for multilib ${multi_index}/${multi_count}: '${multi_flags}'"
+    if [ "${CT_UCLIBC_USE_UCLIBC_NG_ORG}" = "y" ]; then
+        uClibc_name="uClibc-ng"
+    elif [ "${CT_UCLIBC_USE_UCLIBC_ORG}" = "y" ]; then
+        uClibc_name="uClibc"
+    fi
 
-    # Simply copy files until uClibc has the ability to build out-of-tree
-    CT_DoLog EXTRA "Copying sources to build dir"
-    CT_DoExecLog ALL cp -av "${CT_SRC_DIR}/${uclibc_name}-${CT_LIBC_VERSION}/." .
+    CT_DoStep INFO "Building for multilib ${multi_index}/${multi_count}: '${multi_flags}'"
 
     multilib_dir="lib/${multi_os_dir}"
     startfiles_dir="${multi_root}/usr/${multilib_dir}"
@@ -122,10 +80,13 @@ do_libc_backend_once() {
                 HOSTCC="${CT_BUILD}-gcc"                                \
                 PREFIX="${multi_root}/"                                 \
                 MULTILIB_DIR="${multilib_dir}"                          \
-                LOCALE_DATA_FILENAME="${uclibc_locale_tarball}.tgz"     \
                 STRIPTOOL=true                                          \
                 ${CT_LIBC_UCLIBC_VERBOSITY}                             \
                 )
+
+    # Simply copy files until uClibc has the ability to build out-of-tree
+    CT_DoLog EXTRA "Copying sources to build dir"
+    CT_DoExecLog ALL cp -av "${CT_SRC_DIR}/uClibc/." .
 
     # Force the date of the pregen locale data, as the
     # newer ones that are referenced are not available
@@ -133,7 +94,7 @@ do_libc_backend_once() {
 
     # Use the default config if the user did not provide one.
     if [ -z "${CT_LIBC_UCLIBC_CONFIG_FILE}" ]; then
-        CT_LIBC_UCLIBC_CONFIG_FILE="${CT_LIB_DIR}/contrib/uClibc-defconfigs/${uclibc_name}.config"
+        CT_LIBC_UCLIBC_CONFIG_FILE="${CT_LIB_DIR}/packages/${uClibc_name}/config"
     fi
 
     manage_uClibc_config "${CT_LIBC_UCLIBC_CONFIG_FILE}" .config "${multi_flags}"
@@ -192,20 +153,22 @@ do_libc_backend_once() {
             CT_DoExecLog ALL make ${jflag} "${make_args[@]}" \
                 lib/crt1.o lib/crti.o lib/crtn.o
 
-            # From:  http://git.openembedded.org/cgit.cgi/openembedded/commit/?id=ad5668a7ac7e0436db92e55caaf3fdf782b6ba3b
-            # libm.so is needed for ppc, as libgcc is linked against libm.so
-            # No problem to create it for other archs.
-            CT_DoLog EXTRA "Building dummy shared libs"
-            CT_DoExecLog ALL "${CT_TARGET}-${CT_CC}" -nostdlib -nostartfiles \
-                -shared ${multi_flags} -x c /dev/null -o libdummy.so
+            if [ "${CT_SHARED_LIBS}" = "y" ]; then
+                # From:  http://git.openembedded.org/cgit.cgi/openembedded/commit/?id=ad5668a7ac7e0436db92e55caaf3fdf782b6ba3b
+                # libm.so is needed for ppc, as libgcc is linked against libm.so
+                # No problem to create it for other archs.
+                CT_DoLog EXTRA "Building dummy shared libs"
+                CT_DoExecLog ALL "${CT_TARGET}-${CT_CC}" -nostdlib -nostartfiles \
+                    -shared ${multi_flags} -x c /dev/null -o libdummy.so
 
-            CT_DoLog EXTRA "Installing start files"
-            CT_DoExecLog ALL install -m 0644 lib/crt1.o lib/crti.o lib/crtn.o \
-                                             "${startfiles_dir}"
+                CT_DoLog EXTRA "Installing start files"
+                CT_DoExecLog ALL install -m 0644 lib/crt1.o lib/crti.o lib/crtn.o \
+                                                 "${startfiles_dir}"
 
-            CT_DoLog EXTRA "Installing dummy shared libs"
-            CT_DoExecLog ALL install -m 0755 libdummy.so "${startfiles_dir}/libc.so"
-            CT_DoExecLog ALL install -m 0755 libdummy.so "${startfiles_dir}/libm.so"
+                CT_DoLog EXTRA "Installing dummy shared libs"
+                CT_DoExecLog ALL install -m 0755 libdummy.so "${startfiles_dir}/libc.so"
+                CT_DoExecLog ALL install -m 0755 libdummy.so "${startfiles_dir}/libm.so"
+            fi # CT_SHARED_LIBS == y
         fi # CT_THREADS == nptl
     fi # libc_mode == startfiles
 
@@ -248,7 +211,8 @@ do_libc_backend_once() {
 # Initialises the .config file to sensible values
 # $1: original file
 # $2: modified file
-manage_uClibc_config() {
+manage_uClibc_config()
+{
     src="$1"
     dst="$2"
     flags="$3"
@@ -257,13 +221,13 @@ manage_uClibc_config() {
     CT_DoExecLog ALL cp "${src}" "${dst}"
 
     case "${CT_ARCH_ENDIAN}" in
-        big)
+        big|big,little)
             CT_KconfigDisableOption "ARCH_LITTLE_ENDIAN" "${dst}"
             CT_KconfigDisableOption "ARCH_WANTS_LITTLE_ENDIAN" "${dst}"
             CT_KconfigEnableOption "ARCH_BIG_ENDIAN" "${dst}"
             CT_KconfigEnableOption "ARCH_WANTS_BIG_ENDIAN" "${dst}"
             ;;
-        little)
+        little|little,big)
             CT_KconfigDisableOption "ARCH_BIG_ENDIAN" "${dst}"
             CT_KconfigDisableOption "ARCH_WANTS_BIG_ENDIAN" "${dst}"
             CT_KconfigEnableOption "ARCH_LITTLE_ENDIAN" "${dst}"
@@ -275,6 +239,15 @@ manage_uClibc_config() {
         CT_KconfigEnableOption "ARCH_USE_MMU" "${dst}"
     else
         CT_KconfigDisableOption "ARCH_USE_MMU" "${dst}"
+        CT_KconfigDisableOption "UCLIBC_FORMAT_FDPIC" "${dst}"
+        CT_KconfigDisableOption "UCLIBC_FORMAT_FLAT" "${dst}"
+        CT_KconfigDisableOption "UCLIBC_FORMAT_SHARED_FLAT" "${dst}"
+        case "${CT_ARCH_BINFMT_FLAT},${CT_ARCH_BINFMT_FDPIC},${CT_SHARED_LIBS}" in
+            y,,y) CT_KconfigEnableOption "UCLIBC_FORMAT_SHARED_FLAT" "${dst}";;
+            y,,) CT_KconfigEnableOption "UCLIBC_FORMAT_FLAT" "${dst}";;
+            ,y,*) CT_KconfigEnableOption "UCLIBC_FORMAT_FDPIC" "${dst}";;
+            *) CT_Abort "Unsupported binary format";;
+        esac
     fi
 
     if [ "${CT_SHARED_LIBS}" = "y" ]; then
@@ -323,27 +296,15 @@ manage_uClibc_config() {
     # entirely if LOCALE is not set.  If LOCALE was already set, we'll
     # assume the user has already made all the appropriate generation
     # arrangements.  Note that having the uClibc Makefile download the
-    # pregenerated locales is not compatible with crosstool; besides,
-    # crosstool downloads them as part of getandpatch.sh.
-    CT_KconfigDeleteOption "UCLIBC_DOWNLOAD_PREGENERATED_LOCALE" "${dst}"
-    case "${CT_LIBC_UCLIBC_LOCALES}:${CT_LIBC_UCLIBC_LOCALES_PREGEN_DATA}" in
-        :*)
-            ;;
-        y:)
+    # pregenerated locales is not compatible with crosstool.
+    if [ -z "${CT_LIBC_UCLIBC_LOCALES}" ]; then
+            CT_KconfigDisableOption "UCLIBC_HAS_LOCALE" "${dst}"
+    else
             CT_KconfigEnableOption "UCLIBC_HAS_LOCALE" "${dst}"
             CT_KconfigDeleteOption "UCLIBC_PREGENERATED_LOCALE_DATA" "${dst}"
-            CT_KconfigDeleteOption "UCLIBC_DOWNLOAD_PREGENERATED_LOCALE_DATA" \
-                "${dst}"
+            CT_KconfigDeleteOption "UCLIBC_DOWNLOAD_PREGENERATED_LOCALE_DATA" "${dst}"
             CT_KconfigDeleteOption "UCLIBC_HAS_XLOCALE" "${dst}"
-            ;;
-        y:y)
-            CT_KconfigEnableOption "UCLIBC_HAS_LOCALE" "${dst}"
-            CT_KconfigEnableOption "UCLIBC_PREGENERATED_LOCALE_DATA" "${dst}"
-            CT_KconfigDeleteOption "UCLIBC_DOWNLOAD_PREGENERATED_LOCALE_DATA" \
-                "${dst}"
-            CT_KconfigDeleteOption "UCLIBC_HAS_XLOCALE" "${dst}"
-            ;;
-    esac
+    fi
 
     # WCHAR support
     if [ "${CT_LIBC_UCLIBC_WCHAR}" = "y" ]; then
@@ -359,6 +320,13 @@ manage_uClibc_config() {
         CT_KconfigDisableOption "UCLIBC_HAS_IPV6" "${dst}"
     fi
 
+    # Iconv support
+    if [ "${CT_LIBC_UCLIBC_LIBICONV}" = "y" ]; then
+        CT_KconfigEnableOption "UCLIBC_HAS_LIBICONV" "${dst}"
+    else
+        CT_KconfigDisableOption "UCLIBC_HAS_LIBICONV" "${dst}"
+    fi
+
     # Force on options needed for C++ if we'll be making a C++ compiler.
     # I'm not sure locales are a requirement for doing C++... Are they?
     if [ "${CT_CC_LANG_CXX}" = "y" ]; then
@@ -367,11 +335,14 @@ manage_uClibc_config() {
     fi
 
     # Stack Smash Protection (SSP)
-    if [ "${CT_CC_GCC_LIBSSP}" = "y" ]; then
+    if [ "${CT_LIBC_UCLIBC_HAS_SSP}" = "y" ]; then
         CT_KconfigEnableOption "UCLIBC_HAS_SSP" "${dst}"
-        CT_KconfigEnableOption "UCLIBC_BUILD_SSP" "${dst}"
     else
         CT_KconfigDisableOption "UCLIBC_HAS_SSP" "${dst}"
+    fi
+    if [ "${CT_LIBC_UCLIBC_BUILD_SSP}" = "y" ]; then
+        CT_KconfigEnableOption "UCLIBC_BUILD_SSP" "${dst}"
+    else
         CT_KconfigDisableOption "UCLIBC_BUILD_SSP" "${dst}"
     fi
 
@@ -444,9 +415,14 @@ manage_uClibc_config() {
     # Now allow architecture to tweak as it wants
     CT_DoArchUClibcConfig "${dst}"
     CT_DoArchUClibcCflags "${dst}" "${flags}"
+
+    # Preserve the config we created (before uclibc's `make olddefconfig`
+    # overrides anything).
+    CT_DoExecLog ALL cp "${dst}" "${dst}.created-by-ct-ng"
 }
 
-do_libc_post_cc() {
+uClibc_post_cc()
+{
     # uClibc and GCC disagree where the dynamic linker lives. uClibc always
     # places it in the MULTILIB_DIR, while gcc does that for *some* variants
     # and expects it in /lib for the other. So, create a symlink from lib
@@ -455,4 +431,8 @@ do_libc_post_cc() {
     # Moreover, need to do this after the final compiler is built: on targets
     # that use elf2flt, the core compilers cannot find ld when running elf2flt.
     CT_MultilibFixupLDSO
+
+    if [ -n "${CT_LIBC_UCLIBC_CONFIG_FILE}" ]; then
+        CT_InstallConfigurationFile "${CT_LIBC_UCLIBC_CONFIG_FILE}" libc
+    fi
 }

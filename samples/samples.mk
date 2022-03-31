@@ -19,22 +19,22 @@ CT_UPDATE_SAMPLES := no
 # This part deals with the samples help entries
 
 help-config::
+	@echo  '  show-config        - Show a brief overview of current configuration'
 	@echo  '  saveconfig         - Save current config as a preconfigured target'
 
 help-samples::
-	@echo  '  list-samples       - prints the list of all samples (for scripting)'
-	@echo  '  show-<sample>      - show a brief overview of <sample> (list with list-samples)'
-	@echo  '  <sample>           - preconfigure crosstool-NG with <sample> (list with list-samples)'
+	@echo  '  list-samples       - Prints the list of all samples (for scripting)'
+	@echo  '  show-<sample>      - Show a brief overview of <sample> (list with list-samples)'
+	@echo  '  <sample>           - Preconfigure crosstool-NG with <sample> (list with list-samples)'
 	@echo  '  build-all[.#]      - Build *all* samples (list with list-samples) and install in'
 	@echo  '                       $${CT_PREFIX} (set to ~/x-tools by default)'
 
 help-distrib::
 	@echo  '  check-samples      - Verify if samples need updates due to Kconfig changes'
 	@echo  '  update-samples     - Regenerate sample configurations using the current Kconfig'
-	@echo  '  wiki-samples       - Print a DokuWiki table of samples'
 
 help-env::
-	@echo  '  CT_PREFIX=dir      - install samples in dir (see action "build-all", above).'
+	@echo  '  CT_PREFIX=dir      - Install samples in dir (see action "build-all", above).'
 
 # ----------------------------------------------------------
 # This part deals with printing samples information
@@ -43,16 +43,17 @@ help-env::
 PHONY += show-config
 show-config: .config
 	@cp .config .config.sample
-	@$(CT_LIB_DIR)/scripts/showSamples.sh -v current
+	@$(bash) $(CT_LIB_DIR)/scripts/show-config.sh -v current
 	@rm -f .config.sample
 
 # Prints the details of a sample
 PHONY += $(patsubst %,show-%,$(CT_SAMPLES))
-$(patsubst %,show-%,$(CT_SAMPLES)): show-%: config_files
+$(patsubst %,show-%,$(CT_SAMPLES)): show-%:
 	@KCONFIG_CONFIG=$$(pwd)/.config.sample	\
-	    $(CONF) --defconfig=$(call sample_dir,$*)/crosstool.config   \
+	    CT_VCHECK=load \
+        $(CONF) --defconfig=$(call sample_dir,$*)/crosstool.config   \
 	            $(KCONFIG_TOP) >/dev/null
-	@$(CT_LIB_DIR)/scripts/showSamples.sh -v $*
+	@$(bash) $(CT_LIB_DIR)/scripts/show-config.sh -v $*
 	@rm -f .config.sample
 
 # Prints the details of all samples
@@ -66,17 +67,19 @@ list-samples: list-samples-pre $(patsubst %,list-%,$(CT_SAMPLES))
 	@echo ' G (Global)      : sample was installed with crosstool-NG'
 	@echo ' X (EXPERIMENTAL): sample may use EXPERIMENTAL features'
 	@echo ' B (BROKEN)      : sample is currently broken'
+	@echo ' O (OBSOLETE)    : sample needs to be upgraded'
 
 PHONY += list-samples-pre
 list-samples-pre: FORCE
 	@echo 'Status  Sample name'
 
 PHONY += $(patsubst %,list-%,$(CT_SAMPLES))
-$(patsubst %,list-%,$(CT_SAMPLES)): list-%: config_files
+$(patsubst %,list-%,$(CT_SAMPLES)): list-%:
 	@KCONFIG_CONFIG=$$(pwd)/.config.sample	\
+	    CT_VCHECK=load \
 	    $(CONF) --defconfig=$(call sample_dir,$*)/crosstool.config   \
 	            $(KCONFIG_TOP) >/dev/null
-	@$(CT_LIB_DIR)/scripts/showSamples.sh $*
+	@$(bash) $(CT_LIB_DIR)/scripts/show-config.sh $*
 	@rm -f .config.sample
 
 PHONY += list-samples-short
@@ -85,22 +88,27 @@ list-samples-short: FORCE
 	    printf "%s\n" "$${s}";          \
 	done
 
-# Check one sample
+# Check one sample. Note that we are not loading but rather copying the defconfig;
+# loading it while it contains some removed options would reset them to currently
+# supported default values.
 PHONY += $(patsubst %,check-%,$(CT_SAMPLES))
-$(patsubst %,check-%,$(CT_SAMPLES)): check-%: config_files
-	@export KCONFIG_CONFIG=$$(pwd)/.config.sample;                                  \
+$(patsubst %,check-%,$(CT_SAMPLES)): check-%:
+	@set -e; export KCONFIG_CONFIG=$$(pwd)/.config.sample;                          \
 	 CT_NG_SAMPLE=$(call sample_dir,$*)/crosstool.config;                           \
-	 $(CONF) -s --defconfig=$${CT_NG_SAMPLE} $(KCONFIG_TOP) &>/dev/null;            \
-	 $(CONF) -s --savedefconfig=$$(pwd)/.defconfig $(KCONFIG_TOP) &>/dev/null;      \
-	 old_sha1=$$( sha1sum "$${CT_NG_SAMPLE}" |cut -d ' ' -f 1 );                    \
-	 new_sha1=$$( sha1sum .defconfig |cut -d ' ' -f 1 );                            \
-	 if [ $${old_sha1} != $${new_sha1} ]; then                                      \
-	    if [ $(CT_UPDATE_SAMPLES) = yes ]; then                                     \
-	        echo "Updating $*";                                                     \
-		mv .defconfig "$${CT_NG_SAMPLE}";                                       \
+	 cp $${CT_NG_SAMPLE} .config.sample;                                            \
+	 CT_UPGRADECONFIG=yes                                                           \
+	     $(bash) $(CT_LIB_DIR)/scripts/version-check.sh .config.sample &>/dev/null; \
+	 CT_VCHECK=load $(CONF) -s --olddefconfig                                       \
+	     $(KCONFIG_TOP) &>/dev/null;                                                \
+	 CT_VCHECK=save $(CONF) -s --savedefconfig=$$(pwd)/.defconfig                   \
+	     $(KCONFIG_TOP) &>/dev/null;                                                \
+	 if ! cmp -s "$${CT_NG_SAMPLE}" .defconfig; then                                \
+		if [ $(CT_UPDATE_SAMPLES) = yes ]; then                                     \
+			echo "Updating $*";                                                     \
+			mv .defconfig "$${CT_NG_SAMPLE}";                                       \
 	    else                                                                        \
-		echo "$* needs update:";                                                \
-		diff -du0 "$${CT_NG_SAMPLE}" .defconfig |tail -n +4;                    \
+			echo "$* needs update:";                                                \
+			diff -d -U 0 "$${CT_NG_SAMPLE}" .defconfig |tail -n +4;                 \
 	    fi;                                                                         \
 	 fi
 	@rm -f .config.sample* .defconfig
@@ -109,22 +117,6 @@ check-samples: $(patsubst %,check-%,$(CT_SAMPLES))
 
 update-samples:
 	$(SILENT)$(MAKE) -rf $(CT_NG) check-samples CT_UPDATE_SAMPLES=yes
-
-PHONY += wiki-samples
-wiki-samples: wiki-samples-pre $(patsubst %,wiki-%,$(CT_SAMPLES)) wiki-samples-post
-
-wiki-samples-pre: FORCE
-	$(SILENT)$(CT_LIB_DIR)/scripts/showSamples.sh -w
-
-wiki-samples-post: FORCE
-	$(SILENT)$(CT_LIB_DIR)/scripts/showSamples.sh -W $(CT_SAMPLES)
-
-$(patsubst %,wiki-%,$(CT_SAMPLES)): wiki-%: config_files
-	$(SILENT)KCONFIG_CONFIG=$$(pwd)/.config.sample	\
-	    $(CONF) --defconfig=$(call sample_dir,$*)/crosstool.config   \
-	            $(KCONFIG_TOP) >/dev/null
-	$(SILENT)$(CT_LIB_DIR)/scripts/showSamples.sh -w $*
-	$(SILENT)rm -f .config.sample
 
 # ----------------------------------------------------------
 # This part deals with saving/restoring samples
@@ -136,7 +128,7 @@ samples:
 
 # Save a sample
 saveconfig: .config samples
-	$(SILENT)$(CT_LIB_DIR)/scripts/saveSample.sh
+	$(SILENT)CT_VCHECK=save CONF=$(CONF) $(bash) $(CT_LIB_DIR)/scripts/saveSample.sh
 
 # The 'sample_dir' function prints the directory in which the sample is,
 # searching first in local samples, then in global samples
@@ -146,9 +138,10 @@ endef
 
 # How we do recall one sample
 PHONY += $(CT_SAMPLES)
-$(CT_SAMPLES): config_files
-	@$(CT_ECHO) "  CONF  $(KCONFIG_TOP)"
-	$(SILENT)$(CONF) --defconfig=$(call sample_dir,$@)/crosstool.config $(KCONFIG_TOP)
+$(CT_SAMPLES): check-config
+	@$(CT_ECHO) "  CONF  $@"
+	$(SILENT)CT_VCHECK=load $(CONF) --defconfig=$(call sample_dir,$@)/crosstool.config $(KCONFIG_TOP)
+	@CT_VCHECK=strict $(bash) $(CT_LIB_DIR)/scripts/version-check.sh .config
 	@echo
 	@echo  '***********************************************************'
 	@echo
@@ -185,7 +178,7 @@ target_triplet = $(if $(findstring $(__comma),$(1)),$(word 2,$(subst $(__comma),
 # $1: sample name (target tuple, or host/target tuples separated by a comma)
 define build_sample
 	@$(CT_ECHO) '  CONF  $(1)'
-	$(SILENT)$(CONF) -s --defconfig=$(call sample_dir,$(1))/crosstool.config $(KCONFIG_TOP)
+	$(SILENT)CT_VCHECK=load $(CONF) -s --defconfig=$(call sample_dir,$(1))/crosstool.config $(KCONFIG_TOP)
 	$(SILENT)[ -n "$(CT_PREFIX)" ] && $(sed) -i -r -e 's:^(CT_PREFIX=).*$$:\1"$(CT_PREFIX)":;' .config || :
 	$(SILENT)$(sed) -i -r -e 's:^.*(CT_LOG_(WARN|INFO|EXTRA|DEBUG|ALL)).*$$:# \1 is not set:;' .config
 	$(SILENT)$(sed) -i -r -e 's:^.*(CT_LOG_ERROR).*$$:\1=y:;' .config
@@ -207,9 +200,9 @@ define build_sample
 	mkdir -p .build-all/$$status/$(1); \
 	bzip2 < build.log > .build-all/$$status/$(1)/build.log.bz2; \
 	if [ "$$status" = PASS ]; then \
-		blddir=`$(bash) $(CT_LIB_DIR)/scripts/showConfig.sh '$${CT_BUILD_TOP_DIR}'`; \
+		blddir=`$(bash) $(CT_LIB_DIR)/scripts/show-tuple.sh '$${CT_BUILD_TOP_DIR}'`; \
 		[ -z "$(CT_PRESERVE_PASSED_BUILDS)" ] && rm -rf $${blddir}; \
-		$(bash) $(CT_LIB_DIR)/scripts/showConfig.sh '$${CT_PREFIX_DIR}' > .build-all/PASS/$(1)/prefix; \
+		$(bash) $(CT_LIB_DIR)/scripts/show-tuple.sh '$${CT_PREFIX_DIR}' > .build-all/PASS/$(1)/prefix; \
 	fi; \
 	:
 endef
@@ -225,7 +218,7 @@ endif # MAKECMDGOALS contains a build sample rule
 endif # MAKECMDGOALS != ""
 
 # Build a single sample
-$(patsubst %,build-%,$(CT_SAMPLES)): build-%: config_files
+$(patsubst %,build-%,$(CT_SAMPLES)): build-%:
 	$(call build_sample,$*)
 
 # Cross samples (build==host)

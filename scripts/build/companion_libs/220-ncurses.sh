@@ -9,15 +9,11 @@ do_ncurses_for_target() { :; }
 if [ "${CT_NCURSES_TARGET}" = "y" -o "${CT_NCURSES}" = "y" ]; then
 
 do_ncurses_get() {
-    CT_GetFile "ncurses-${CT_NCURSES_VERSION}" .tar.gz  \
-               {http,ftp,https}://ftp.gnu.org/pub/gnu/ncurses     \
-               ftp://invisible-island.net/ncurses
+    CT_Fetch NCURSES
 }
 
 do_ncurses_extract() {
-    CT_Extract "ncurses-${CT_NCURSES_VERSION}"
-    CT_DoExecLog ALL chmod -R u+w "${CT_SRC_DIR}/ncurses-${CT_NCURSES_VERSION}"
-    CT_Patch "ncurses" "${CT_NCURSES_VERSION}"
+    CT_ExtractPatch NCURSES
 }
 
 # We need tic that runs on the build when building ncurses for host/target
@@ -56,7 +52,8 @@ do_ncurses_for_host() {
           "--without-cxx-binding" \
           "--without-ada" )
     if [ "${CT_NCURSES_HOST_DISABLE_DB}" = "y" ]; then
-        opts+=( "--disable-database" )
+        opts+=( "--disable-database" \
+                "--disable-db-install" )
     fi
     if [ -n "${CT_NCURSES_HOST_FALLBACKS}" ]; then
         opts+=( "--with-fallbacks=${CT_NCURSES_HOST_FALLBACKS}" )
@@ -100,6 +97,7 @@ do_ncurses_for_target() {
                        prefix="${prefix}" \
                        destdir="${CT_SYSROOT_DIR}" \
                        shared="${CT_SHARED_LIBS}" \
+                       cflags="${CT_ALL_TARGET_CFLAGS}" \
                        "${opts[@]}"
     CT_Popd
     CT_EndStep
@@ -127,7 +125,7 @@ do_ncurses_backend() {
     for arg in "$@"; do
         case "$arg" in
             --*)
-                ncurses_opts+=("$arg")
+                ncurses_opts+=("${arg}")
                 ;;
             *)
                 eval "${arg// /\\ }"
@@ -157,7 +155,7 @@ do_ncurses_backend() {
     CFLAGS="${cflags}"                                                  \
     LDFLAGS="${ldflags}"                                                \
     ${CONFIG_SHELL}                                                     \
-    "${CT_SRC_DIR}/ncurses-${CT_NCURSES_VERSION}/configure"             \
+    "${CT_SRC_DIR}/ncurses/configure"                                   \
         --build=${CT_BUILD}                                             \
         --host=${host}                                                  \
         --prefix="${prefix}"                                            \
@@ -176,9 +174,13 @@ do_ncurses_backend() {
     # it also builds ncurses anyway, and dedicated targets (install.includes and
     # install.progs) do not do well with parallel make (-jX).
     CT_DoLog EXTRA "Building ncurses"
-    CT_DoExecLog ALL make ${JOBSFLAGS}
+    CT_DoExecLog ALL make ${CT_JOBSFLAGS}
+
+    # STRIPPROG is handled by our wrapper around install.
     CT_DoLog EXTRA "Installing ncurses"
-    CT_DoExecLog ALL make "${install_target}"
+    CT_DoExecLog ALL \
+        STRIPPROG="${host}-strip" \
+        make "${install_target}"
 }
 
 fi

@@ -13,14 +13,12 @@ if [ "${CT_ZLIB}" = "y" ]; then
 
 # Download zlib
 do_zlib_get() {
-    CT_GetFile "zlib-${CT_ZLIB_VERSION}"         \
-        "http://downloads.sourceforge.net/project/libpng/zlib/${CT_ZLIB_VERSION}"
+    CT_Fetch ZLIB
 }
 
 # Extract zlib
 do_zlib_extract() {
-    CT_Extract "zlib-${CT_ZLIB_VERSION}"
-    CT_Patch "zlib" "${CT_ZLIB_VERSION}"
+    CT_ExtractPatch ZLIB
 }
 
 # Build zlib for running on build
@@ -76,30 +74,51 @@ do_zlib_backend() {
     local ldflags
     local arg
     local -a extra_config
+    local -a extra_make
 
     for arg in "$@"; do
         eval "${arg// /\\ }"
     done
 
-    CT_DoLog EXTRA "Configuring zlib"
+    case "${host}" in
+    *-mingw32)
+        # zlib treats mingw host differently and requires using a different
+        # makefile rather than configure+make. It also does not support
+        # out-of-tree building.
+        cp -av "${CT_SRC_DIR}/zlib/." .
+        extra_make=( -f win32/Makefile.gcc \
+            PREFIX="${host}-" \
+            SHAREDLIB= \
+            IMPLIB= \
+            LIBRARY_PATH="${prefix}/lib" \
+            INCLUDE_PATH="${prefix}/include" \
+            BINARY_PATH="${prefix}/bin" \
+            prefix="${prefix}" \
+            )
+        ;;
 
-    CT_DoExecLog CFG                                  \
-    CFLAGS="${cflags}"                                \
-    LDFLAGS="${ldflags}"                              \
-    CHOST="${host}"                                   \
-    ${CONFIG_SHELL}                                   \
-    "${CT_SRC_DIR}/zlib-${CT_ZLIB_VERSION}/configure" \
-        --prefix="${prefix}"                          \
-        --static                                      \
-        "${extra_config[@]}"
+    *)
+        CT_DoLog EXTRA "Configuring zlib"
+
+        CT_DoExecLog CFG                                  \
+        CFLAGS="${cflags}"                                \
+        LDFLAGS="${ldflags}"                              \
+        CHOST="${host}"                                   \
+        ${CONFIG_SHELL}                                   \
+        "${CT_SRC_DIR}/zlib/configure"                    \
+            --prefix="${prefix}"                          \
+            --static                                      \
+            "${extra_config[@]}"
+        ;;
+    esac
 
     CT_DoLog EXTRA "Building zlib"
-    CT_DoExecLog ALL make ${JOBSFLAGS}
+    CT_DoExecLog ALL make "${extra_make[@]}" ${CT_JOBSFLAGS}
 
     if [ "${CT_COMPLIBS_CHECK}" = "y" ]; then
         if [ "${host}" = "${CT_BUILD}" ]; then
             CT_DoLog EXTRA "Checking zlib"
-            CT_DoExecLog ALL make ${JOBSFLAGS} -s check
+            CT_DoExecLog ALL make "${extra_make[@]}" -s test
         else
             # Cannot run host binaries on build in a canadian cross
             CT_DoLog EXTRA "Skipping check for zlib on the host"
@@ -107,7 +126,7 @@ do_zlib_backend() {
     fi
 
     CT_DoLog EXTRA "Installing zlib"
-    CT_DoExecLog ALL make install
+    CT_DoExecLog ALL make "${extra_make[@]}" install
 }
 
 fi # CT_ZLIB
