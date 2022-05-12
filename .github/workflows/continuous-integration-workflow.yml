@@ -1,0 +1,128 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  crosstool:
+    runs-on: ${{ matrix.host }}
+    strategy:
+      matrix:
+        host: [ "ubuntu-latest", "macos-10.15" ]
+    steps:
+      - name: "clone"
+        uses: actions/checkout@v2
+      - name: "prereq Linux"
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          sudo apt-get install -y gperf help2man libtool-bin
+      - name: "prereq macOS"
+        if: ${{ runner.os == 'macOS' }}
+        run: |
+          brew install autoconf automake bash binutils gawk gnu-sed \
+               gnu-tar help2man make ncurses
+      - name: "build ct-ng"
+        run: |
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            export PATH="$PATH:/usr/local/opt/binutils/bin"
+            export CPPFLAGS="-I/usr/local/opt/ncurses/include -I/usr/local/opt/gettext/include"
+            export LDFLAGS="-L/usr/local/opt/ncurses/lib -L/usr/local/opt/gettext/lib"
+          fi
+          ./bootstrap
+          ./configure --prefix=$PWD/.local/
+          make
+          make install
+          tar -cf ct-ng.tar .local/
+      - name: "upload ct-ng"
+        uses: actions/upload-artifact@v2
+        with:
+          name: crosstool.${{ matrix.host }}
+          path: ct-ng.tar
+      - name: "upload config.log"
+        uses: actions/upload-artifact@v2
+        with:
+          name: config.log.${{ matrix.host }}
+          path: config.log
+        if: ${{ always() }}
+
+  tarballs:
+    needs: crosstool
+    runs-on: ${{ matrix.host }}
+    strategy:
+      matrix:
+        host: [ "ubuntu-latest" ]
+    steps:
+      - name: "download ct-ng"
+        uses: actions/download-artifact@v2
+        with:
+          name: crosstool.${{ matrix.host }}
+      - name: "extract ct-ng"
+        run: |
+          tar -xf ct-ng.tar
+      - name: "prereq Linux"
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          sudo apt-get install -y gperf help2man libtool-bin
+          echo "$GITHUB_WORKSPACE/.local/bin" >> $GITHUB_PATH
+      - name: "ct-ng source"
+        run: |
+          mkdir -p src
+          for sample in aarch64-unknown-linux-gnu arm-picolibc-eabi \
+                arm-unknown-linux-musleabi armv6-nommu-linux-uclibcgnueabi; do \
+                ct-ng $sample; \
+                sed -i -e '/CT_LOG_PROGRESS_BAR/s/y$/n/' .config; \
+                sed -i -e '/CT_LOCAL_TARBALLS_DIR/s/HOME/CT_TOP_DIR/' .config; \
+                sed -i -e '/CT_PREFIX_DIR/s/HOME/CT_TOP_DIR/' .config; \
+                sed -i -e 's/^.*CT_COMP_TOOLS_BISON.*$/CT_COMP_TOOLS_BISON=y/' .config; \
+                sed -i -e 's/^.*CT_COMP_TOOLS_M4.*$/CT_COMP_TOOLS_M4=y/' .config; \
+                sed -i -e 's/^.*CT_COMP_TOOLS_MAKE.*$/CT_COMP_TOOLS_MAKE=y/' .config; \
+                ct-ng olddefconfig; \
+                ct-ng source; \
+          done
+          tar -cvf src.tar src
+      - name: "upload sources"
+        uses: actions/upload-artifact@v2
+        with:
+          name: src.tar
+          path: src.tar
+
+  toolchains:
+    needs: [ crosstool, tarballs ]
+    uses: ./.github/workflows/build-toolchains.yml
+    with:
+      samples: >-
+        [
+          "aarch64-unknown-linux-gnu",
+          "arc-multilib-elf32",
+          "arc-multilib-linux-gnu",
+          "arc-multilib-linux-uclibc",
+          "arm-picolibc-eabi",
+          "arm-unknown-linux-gnueabi",
+          "arm-unknown-linux-musleabi",
+          "armv6-nommu-linux-uclibcgnueabi",
+          "avr",
+          "i686-w64-mingw32",
+          "mips-unknown-elf",
+          "mips-unknown-linux-gnu",
+          "mips64-unknown-linux-gnu",
+          "powerpc-unknown-linux-gnu",
+          "powerpc64-unknown-linux-gnu",
+          "riscv32-unknown-elf",
+          "riscv64-unknown-elf",
+          "s390-unknown-linux-gnu",
+          "sh-unknown-elf",
+          "sparc-unknown-linux-gnu",
+          "x86_64-multilib-linux-uclibc",
+          "x86_64-unknown-linux-gnu",
+          "x86_64-w64-mingw32",
+          "xtensa-fsf-linux-uclibc"
+        ]
+
+  canadian-cross:
+    needs: [ toolchains ]
+    uses: ./.github/workflows/build-toolchains.yml
+    with:
+      samples: >-
+        ["x86_64-w64-mingw32,x86_64-pc-linux-gnu"]
+      canadian-cross: true

@@ -1,9 +1,19 @@
-conf
-?conf
+# SPDX-License-Identifier: GPL-2.0-only
+
+#
+# Generated files
+#
 *.o
 .deps
-zconf.c
-zconf.lex.c
-*.exe
-Makefile
 .dirstamp
+*.lex.c
+*.tab.c
+*.tab.h
+Makefile
+
+#
+# configuration programs
+#
+conf
+mconf
+nconf
